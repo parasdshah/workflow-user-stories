@@ -60,4 +60,46 @@ public class DeploymentService {
     // usually just deploys new version)
     // To "rollback", we can fetch the resource of a previous deployment and
     // redeploy it as new version.
+
+    @Transactional
+    public void undeployWorkflow(String deploymentId) {
+        log.info("Undeploying workflow deployment: {}", deploymentId);
+        // Cascade delete (true) to remove process definitions and instances
+        repositoryService.deleteDeployment(deploymentId, true);
+    }
+
+    @Transactional
+    public Deployment rollbackWorkflow(String deploymentId) {
+        log.info("Rolling back to deployment: {}", deploymentId);
+
+        // 1. Get Process Definition to find resource name
+        org.flowable.engine.repository.ProcessDefinition pd = repositoryService.createProcessDefinitionQuery()
+                .deploymentId(deploymentId)
+                .singleResult();
+
+        if (pd == null) {
+            throw new IllegalArgumentException("No process definition found for deployment: " + deploymentId);
+        }
+
+        // 2. Get Resource Stream (BPMN XML)
+        String resourceName = pd.getResourceName();
+        try (java.io.InputStream xmlStream = repositoryService.getResourceAsStream(deploymentId, resourceName)) {
+            if (xmlStream == null) {
+                throw new IllegalStateException("Could not read resource: " + resourceName);
+            }
+
+            // 3. Redeploy as new version
+            Deployment deployment = repositoryService.createDeployment()
+                    .name(pd.getName() + " (Rollback)")
+                    .key(pd.getKey())
+                    .addInputStream(resourceName, xmlStream) // Preserves original filename
+                    .deploy();
+
+            log.info("Rolled back {} to version from deployment {}", pd.getKey(), deploymentId);
+            return deployment;
+
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("Failed to read resource for rollback", e);
+        }
+    }
 }

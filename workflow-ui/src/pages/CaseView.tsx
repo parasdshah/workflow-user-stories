@@ -20,8 +20,6 @@ interface StageDTO {
     status: string;
     assignee?: string;
     createdTime?: string;
-    assignee?: string;
-    createdTime?: string;
     endTime?: string;
     allowedActions?: string; // "APPROVE,REJECT"
 }

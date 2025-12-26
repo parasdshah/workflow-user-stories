@@ -11,6 +11,7 @@ interface StageDTO {
     endTime?: string;
     dueDate?: string;
     allowedActions?: string;
+    actionTaken?: string;
 }
 
 interface CaseTimelineProps {
@@ -58,6 +59,11 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
                             <Text size="xs" mt={4}>
                                 Completed: {new Date(stage.endTime).toLocaleString()}
                             </Text>
+                        )}
+                        {stage.status === 'COMPLETED' && stage.actionTaken && (
+                            <Badge color={stage.actionTaken === 'REJECT' ? 'red' : 'green'} size="sm" mt={4}>
+                                Action: {stage.actionTaken}
+                            </Badge>
                         )}
                         {stage.status === 'ACTIVE' && (
                             <Group mt="xs">

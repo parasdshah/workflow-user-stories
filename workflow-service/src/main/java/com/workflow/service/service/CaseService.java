@@ -89,6 +89,7 @@ public class CaseService {
         List<HistoricTaskInstance> historicTasks = historyService.createHistoricTaskInstanceQuery()
                 .processInstanceId(caseId)
                 .finished()
+                .includeTaskLocalVariables() // Fetch local vars for actionTaken
                 .orderByTaskCreateTime().asc()
                 .list();
 
@@ -108,6 +109,25 @@ public class CaseService {
         }
 
         return stages;
+    }
+
+    public List<StageDTO> getUserTaskHistory(String userId) {
+        List<HistoricTaskInstance> tasks = historyService.createHistoricTaskInstanceQuery()
+                .taskAssignee(userId)
+                .finished()
+                .includeTaskLocalVariables()
+                .orderByHistoricTaskInstanceEndTime().desc()
+                .list();
+
+        List<StageDTO> result = new ArrayList<>();
+        for (HistoricTaskInstance task : tasks) {
+            StageDTO dto = mapToStageDTO(task, "COMPLETED");
+            // Enrich with Case Name nicely? (Already handled in mapCommon via name/code,
+            // but we might want Workflow Name here if needed.
+            // For now, StageDTO contains task info and stage info.)
+            result.add(dto);
+        }
+        return result;
     }
 
     @Transactional
@@ -152,6 +172,8 @@ public class CaseService {
                     }
                 }
             }
+            // Save outcome as LOCAL variable to persist action for this specific task
+            taskService.setVariableLocal(taskId, "outcome", outcome);
         }
 
         taskService.complete(taskId, variables);
@@ -199,27 +221,36 @@ public class CaseService {
 
     private StageDTO mapToStageDTO(HistoricTaskInstance task, String status) {
         StageDTO dto = mapCommonTaskInfo(task.getName(), task.getTaskDefinitionKey(), task.getAssignee(),
-                task.getCreateTime(), task.getDueDate(), task.getId(), task.getProcessDefinitionId());
+                task.getCreateTime(), task.getDueDate(), task.getId(), task.getProcessDefinitionId(),
+                task.getProcessInstanceId());
         dto.setStatus(status);
         if (task.getEndTime() != null) {
             dto.setEndTime(LocalDateTime.ofInstant(task.getEndTime().toInstant(), ZoneId.systemDefault()));
         }
+
+        // Map outcome to actionTaken from local variables
+        if (task.getTaskLocalVariables() != null && task.getTaskLocalVariables().containsKey("outcome")) {
+            dto.setActionTaken((String) task.getTaskLocalVariables().get("outcome"));
+        }
+
         return dto;
     }
 
     private StageDTO mapToStageDTO(Task task, String status) {
         StageDTO dto = mapCommonTaskInfo(task.getName(), task.getTaskDefinitionKey(), task.getAssignee(),
-                task.getCreateTime(), task.getDueDate(), task.getId(), task.getProcessDefinitionId());
+                task.getCreateTime(), task.getDueDate(), task.getId(), task.getProcessDefinitionId(),
+                task.getProcessInstanceId());
         dto.setStatus(status);
         return dto;
     }
 
     private StageDTO mapCommonTaskInfo(String name, String code, String assignee, Date createTime, Date dueDate,
-            String taskId, String processDefinitionId) {
+            String taskId, String processDefinitionId, String processInstanceId) {
         StageDTO dto = new StageDTO();
         dto.setStageName(name);
         dto.setStageCode(code);
         dto.setTaskId(taskId);
+        dto.setCaseId(processInstanceId);
         dto.setAssignee(assignee);
         if (createTime != null) {
             dto.setCreatedTime(LocalDateTime.ofInstant(createTime.toInstant(), ZoneId.systemDefault()));
@@ -230,18 +261,11 @@ public class CaseService {
 
         // K. Stage Actions - Populate allowedActions
         try {
-            // Need workflow code.
-            // If we have processDefinitionId, we can get it, or if it is cached.
-            // For list optimization, we might need a better way, but for now:
             if (processDefinitionId != null) {
-                // This might be expensive in a loop.
-                // Ideally pass workflowCode if known, or cache.
-                // For now, let's look up only if not null.
-                // Optimization: Using repository cache if available
-                // Simple approach:
                 org.flowable.engine.repository.ProcessDefinition pd = repositoryService.createProcessDefinitionQuery()
                         .processDefinitionId(processDefinitionId).singleResult();
                 if (pd != null) {
+                    dto.setWorkflowCode(pd.getKey()); // Populate workflowCode
                     stageConfigRepository.findByWorkflowCodeAndStageCode(pd.getKey(), code)
                             .ifPresent(config -> dto.setAllowedActions(config.getAllowedActions()));
                 }

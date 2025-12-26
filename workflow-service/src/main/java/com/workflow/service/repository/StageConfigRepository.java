@@ -9,6 +9,10 @@ import java.util.Optional;
 @Repository
 public interface StageConfigRepository extends JpaRepository<StageConfig, Long> {
     List<StageConfig> findByWorkflowCodeOrderBySequenceOrderAsc(String workflowCode);
+
     Optional<StageConfig> findByWorkflowCodeAndStageCode(String workflowCode, String stageCode);
+
     boolean existsByWorkflowCodeAndStageCode(String workflowCode, String stageCode);
+
+    void deleteByWorkflowCode(String workflowCode);
 }

@@ -48,6 +48,26 @@ public class DeploymentController {
         return ResponseEntity.ok(dtos);
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<String> undeploy(@PathVariable String id) {
+        try {
+            deploymentService.undeployWorkflow(id);
+            return ResponseEntity.ok("Deployment deleted successfully");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Undeploy failed: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/{id}/rollback")
+    public ResponseEntity<String> rollback(@PathVariable String id) {
+        try {
+            Deployment deployment = deploymentService.rollbackWorkflow(id);
+            return ResponseEntity.ok("Rolled back to deployment: " + deployment.getId());
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Rollback failed: " + e.getMessage());
+        }
+    }
+
     // Simple DTO
     record DeploymentDto(String id, String name, java.util.Date deploymentTime) {
     }

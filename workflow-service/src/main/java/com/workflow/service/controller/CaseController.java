@@ -49,6 +49,11 @@ public class CaseController {
         return ResponseEntity.ok(caseService.getStages(id));
     }
 
+    @GetMapping("/tasks/history")
+    public ResponseEntity<List<StageDTO>> getUserTaskHistory(@RequestParam String userId) {
+        return ResponseEntity.ok(caseService.getUserTaskHistory(userId));
+    }
+
     @PostMapping("/{caseId}/tasks/{taskId}/complete")
     public ResponseEntity<String> completeTask(@PathVariable String caseId, @PathVariable String taskId,
             @RequestBody Map<String, Object> variables,
