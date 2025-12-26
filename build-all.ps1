@@ -32,7 +32,7 @@ Push-Location workflow-ui
 try {
     # Install
     Write-Host "Running npm install..."
-    Start-Process -FilePath "npm" -ArgumentList "install" -Wait -NoNewWindow -PassThru | ForEach-Object {
+    Start-Process -FilePath "npm.cmd" -ArgumentList "install" -Wait -NoNewWindow -PassThru | ForEach-Object {
         if ($_.ExitCode -ne 0) {
             throw "npm install failed"
         }
@@ -40,7 +40,7 @@ try {
     
     # Build
     Write-Host "Running npm run build..."
-    Start-Process -FilePath "npm" -ArgumentList "run build" -Wait -NoNewWindow -PassThru | ForEach-Object {
+    Start-Process -FilePath "npm.cmd" -ArgumentList "run build" -Wait -NoNewWindow -PassThru | ForEach-Object {
         if ($_.ExitCode -ne 0) {
             throw "npm run build failed"
         }

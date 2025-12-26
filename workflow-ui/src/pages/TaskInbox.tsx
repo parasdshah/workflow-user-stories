@@ -1,5 +1,6 @@
 
 import { Container, Title, Accordion, Badge, Group, Text, Loader, Button, Tabs } from '@mantine/core';
+import { IconCheck, IconX } from '@tabler/icons-react';
 import { useState, useEffect } from 'react';
 
 interface CaseDto {
@@ -168,7 +169,16 @@ function TaskInbox() {
                                                     <Text size="sm" fw={500}>{t.stageName}</Text>
                                                     <Badge variant="outline" size="sm">{t.assignee || 'Unassigned'}</Badge>
                                                     <Text size="xs" c="dimmed">End: {t.endTime ? new Date(t.endTime).toLocaleString() : '-'}</Text>
-                                                    {t.actionTaken && <Badge size="xs" color={t.actionTaken === 'REJECT' ? 'red' : 'green'}>{t.actionTaken}</Badge>}
+                                                    <Text size="xs" c="dimmed">End: {t.endTime ? new Date(t.endTime).toLocaleString() : '-'}</Text>
+                                                    {t.actionTaken && (
+                                                        <Badge
+                                                            size="xs"
+                                                            color={t.actionTaken === 'REJECT' ? 'red' : 'green'}
+                                                            leftSection={t.actionTaken === 'REJECT' ? <IconX size={10} /> : <IconCheck size={10} />}
+                                                        >
+                                                            {t.actionTaken}
+                                                        </Badge>
+                                                    )}
                                                 </Group>
                                             ))}
                                         </Accordion.Panel>

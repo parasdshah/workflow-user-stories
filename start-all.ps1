@@ -16,4 +16,4 @@ Start-Sleep -Seconds 15
 # Start Frontend
 Write-Host "Starting Frontend..."
 Set-Location workflow-ui
-Start-Process -FilePath "npm" -ArgumentList "run dev" -NoNewWindow
+Start-Process -FilePath "npm.cmd" -ArgumentList "run dev" -NoNewWindow

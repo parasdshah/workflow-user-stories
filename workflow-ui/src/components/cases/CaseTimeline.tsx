@@ -1,5 +1,5 @@
 import { Timeline, Text, Badge, Card, Button, Group } from '@mantine/core';
-import { IconCheck, IconCircleDashed, IconPlayerPlay } from '@tabler/icons-react';
+import { IconCheck, IconCircleDashed, IconPlayerPlay, IconX } from '@tabler/icons-react';
 
 interface StageDTO {
     stageCode: string;
@@ -61,7 +61,12 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
                             </Text>
                         )}
                         {stage.status === 'COMPLETED' && stage.actionTaken && (
-                            <Badge color={stage.actionTaken === 'REJECT' ? 'red' : 'green'} size="sm" mt={4}>
+                            <Badge
+                                color={stage.actionTaken === 'REJECT' ? 'red' : 'green'}
+                                size="sm"
+                                mt={4}
+                                leftSection={stage.actionTaken === 'REJECT' ? <IconX size={12} /> : <IconCheck size={12} />}
+                            >
                                 Action: {stage.actionTaken}
                             </Badge>
                         )}
