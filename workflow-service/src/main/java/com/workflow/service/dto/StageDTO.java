@@ -1,0 +1,16 @@
+package com.workflow.service.dto;
+
+import lombok.Data;
+import java.time.LocalDateTime;
+
+@Data
+public class StageDTO {
+    private String stageName;
+    private String stageCode; // User Task ID or Activity ID
+    private String taskId;
+    private String status; // ACTIVE, COMPLETED
+    private String assignee;
+    private LocalDateTime createdTime;
+    private LocalDateTime endTime;
+    private LocalDateTime dueDate; // For SLA
+}

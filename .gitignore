@@ -1,0 +1,39 @@
+# Maven
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# NodeJS
+node_modules/
+dist/
+build/
+npm-debug.log
+yarn-error.log
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+.DS_Store
+.classpath
+.project
+.settings/
+.factorypath
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Env
+.env

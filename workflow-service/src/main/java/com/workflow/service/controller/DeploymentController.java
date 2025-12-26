@@ -1,0 +1,54 @@
+package com.workflow.service.controller;
+
+import com.workflow.service.service.DeploymentService;
+import lombok.RequiredArgsConstructor;
+import org.flowable.engine.repository.Deployment;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@RestController
+@RequestMapping("/api/deployments")
+@RequiredArgsConstructor
+public class DeploymentController {
+
+    private final DeploymentService deploymentService;
+
+    @GetMapping("/preview/{workflowCode}")
+    public ResponseEntity<String> previewBpmn(@PathVariable String workflowCode) {
+        // F.6 Preview BPMN XML
+        return ResponseEntity.ok(deploymentService.previewBpmn(workflowCode));
+    }
+
+    @PostMapping("/{workflowCode}")
+    public ResponseEntity<String> deployWorkflow(@PathVariable String workflowCode) {
+        // F.7 / J.1 One-click BPMN deployment
+        try {
+            Deployment deployment = deploymentService.deployWorkflow(workflowCode);
+            return ResponseEntity.ok(deployment.getId());
+        } catch (Exception e) {
+            // e.printStackTrace();
+            // log property is available due to @Slf4j on class? No, let's check.
+            // DeploymentController was modified to add logging?
+            // Wait, I need to check if @Slf4j is present.
+            org.slf4j.LoggerFactory.getLogger(DeploymentController.class).error("Deployment failed", e);
+            return ResponseEntity.internalServerError().body("Deployment failed: " + e.getMessage());
+        }
+    }
+
+    @GetMapping
+    public ResponseEntity<List<DeploymentDto>> getHistory(@RequestParam(required = false) String workflowCode) {
+        // J.8 View deployment history
+        List<Deployment> deployments = deploymentService.getDeploymentHistory(workflowCode);
+        List<DeploymentDto> dtos = deployments.stream()
+                .map(d -> new DeploymentDto(d.getId(), d.getName(), d.getDeploymentTime()))
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(dtos);
+    }
+
+    // Simple DTO
+    record DeploymentDto(String id, String name, java.util.Date deploymentTime) {
+    }
+}
