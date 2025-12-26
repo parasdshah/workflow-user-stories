@@ -42,4 +42,8 @@ public class StageConfig {
     // SLA Configuration (G.5)
     private java.math.BigDecimal slaDurationDays;
 
+    // K. Stage Actions
+    @Column(columnDefinition = "TEXT") // JSON or Comma-Separated
+    private String allowedActions; // e.g. ["APPROVE", "REJECT"]
+
 }

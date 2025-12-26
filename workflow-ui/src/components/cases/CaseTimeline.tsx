@@ -10,11 +10,12 @@ interface StageDTO {
     createdTime?: string;
     endTime?: string;
     dueDate?: string;
+    allowedActions?: string;
 }
 
 interface CaseTimelineProps {
     stages: StageDTO[];
-    onAction?: (taskId: string) => void;
+    onAction?: (taskId: string, outcome?: string) => void;
 }
 
 export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
@@ -62,9 +63,25 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
                             <Group mt="xs">
                                 <Badge color="blue" size="xs">In Progress</Badge>
                                 {stage.taskId && onAction && (
-                                    <Button size="xs" variant="outline" onClick={() => onAction(stage.taskId!)}>
-                                        Take Action
-                                    </Button>
+                                    <>
+                                        {stage.allowedActions ? (
+                                            stage.allowedActions.replace(/[\[\]"]/g, '').split(',').map(action => (
+                                                <Button
+                                                    key={action.trim()}
+                                                    size="xs"
+                                                    variant="outline"
+                                                    color={action.trim() === 'REJECT' ? 'red' : 'blue'}
+                                                    onClick={() => onAction(stage.taskId!, action.trim())}
+                                                >
+                                                    {action.trim()}
+                                                </Button>
+                                            ))
+                                        ) : (
+                                            <Button size="xs" variant="outline" onClick={() => onAction(stage.taskId!)}>
+                                                Complete
+                                            </Button>
+                                        )}
+                                    </>
                                 )}
                             </Group>
                         )}

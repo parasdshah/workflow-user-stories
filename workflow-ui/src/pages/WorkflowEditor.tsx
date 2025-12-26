@@ -20,6 +20,7 @@ interface StageConfig {
     postEntryHook?: string; // New
     preExitHook?: string;   // New
     postExitHook?: string;
+    allowedActions?: string; // e.g. "APPROVE,REJECT"
 }
 
 interface ScreenDefinition {
@@ -57,7 +58,8 @@ function WorkflowEditor() {
             preEntryHook: '',
             postEntryHook: '',
             preExitHook: '',
-            postExitHook: ''
+            postExitHook: '',
+            allowedActions: ''
         }
     });
 
@@ -110,7 +112,8 @@ function WorkflowEditor() {
             preEntryHook: stage.preEntryHook || '',
             postEntryHook: stage.postEntryHook || '',
             preExitHook: stage.preExitHook || '',
-            postExitHook: stage.postExitHook || ''
+            postExitHook: stage.postExitHook || '',
+            allowedActions: stage.allowedActions || ''
         });
 
         // Fetch existing mapping if we don't have it locally (e.g. page reload)
@@ -315,6 +318,7 @@ function WorkflowEditor() {
                                         <Table.Td>{s.isNestedWorkflow ? 'Yes' : 'No'}</Table.Td>
                                         <Table.Td>{s.nestedWorkflowCode || '-'}</Table.Td>
                                         <Table.Td>{s.screenCode || '-'}</Table.Td>
+                                        <Table.Td>{s.allowedActions || '-'}</Table.Td>
                                         <Table.Td>
                                             <Group gap="xs">
                                                 <ActionIcon variant="subtle" color="blue" onClick={() => openEditModal(index)}>
@@ -373,6 +377,14 @@ function WorkflowEditor() {
                                 <TextInput label="Post-Entry Class (TaskListener: create)" placeholder="com.example.MyCreateListener" {...stageForm.getInputProps('postEntryHook')} />
                                 <TextInput label="Pre-Exit Class (TaskListener: complete)" placeholder="com.example.MyCompleteListener" {...stageForm.getInputProps('preExitHook')} />
                                 <TextInput label="Post-Exit Class (ExecutionListener: end)" placeholder="com.example.MyEndListener" {...stageForm.getInputProps('postExitHook')} />
+
+                                <Title order={5} mt="sm">Outcome Actions</Title>
+                                <TextInput
+                                    label="Allowed Actions"
+                                    placeholder="e.g. APPROVE,REJECT,ON-HOLD (comma separated)"
+                                    description="Leave empty for default 'Complete' action"
+                                    {...stageForm.getInputProps('allowedActions')}
+                                />
                             </>
                         )}
 

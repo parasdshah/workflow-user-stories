@@ -20,7 +20,10 @@ interface StageDTO {
     status: string;
     assignee?: string;
     createdTime?: string;
+    assignee?: string;
+    createdTime?: string;
     endTime?: string;
+    allowedActions?: string; // "APPROVE,REJECT"
 }
 
 export default function CaseView() {
@@ -59,14 +62,18 @@ export default function CaseView() {
     if (loading) return <Container py="xl"><Loader /></Container>;
     if (!caseDetails) return <Container py="xl"><Text>Case not found</Text></Container>;
 
-    const handleTaskAction = async (taskId: string) => {
-        if (!confirm('Complete this task?')) return;
+    const handleTaskAction = async (taskId: string, outcome?: string) => {
+        const actionLabel = outcome || 'Complete';
+        if (!confirm(`Are you sure you want to ${actionLabel} this task?`)) return;
 
         try {
             const res = await fetch(`/api/runtime/cases/${id}/tasks/${taskId}/complete`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'completed' }) // generic var
+                body: JSON.stringify({
+                    action: 'completed',
+                    outcome: outcome
+                })
             });
 
             if (res.ok) {

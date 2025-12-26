@@ -13,4 +13,5 @@ public class StageDTO {
     private LocalDateTime createdTime;
     private LocalDateTime endTime;
     private LocalDateTime dueDate; // For SLA
+    private String allowedActions; // e.g. ["APPROVE", "REJECT"]
 }
