@@ -74,11 +74,21 @@ public class DeploymentFeaturesTest {
         // 2. Verify exists
         assertThat(repositoryService.createDeploymentQuery().deploymentId(deploymentId).count()).isEqualTo(1);
 
-        // 3. Undeploy
+        // 3. Undeploy (Soft Delete)
         deploymentService.undeployWorkflow(deploymentId);
 
-        // 4. Verify gone
-        assertThat(repositoryService.createDeploymentQuery().deploymentId(deploymentId).count()).isEqualTo(0);
+        // 4. Verify deployment STILL exists (Soft Delete)
+        assertThat(repositoryService.createDeploymentQuery().deploymentId(deploymentId).count()).isEqualTo(1);
+
+        // 5. Verify WorkflowMaster status is DELETED
+        com.workflow.service.entity.WorkflowMaster wm = workflowDefinitionService.getWorkflow(WORKFLOW_CODE)
+                .orElseThrow();
+        assertThat(wm.getStatus()).isEqualTo("DELETED");
+
+        // 6. Verify Process Definition is Suspended
+        org.flowable.engine.repository.ProcessDefinition pd = repositoryService.createProcessDefinitionQuery()
+                .deploymentId(deploymentId).singleResult();
+        assertThat(pd.isSuspended()).isTrue();
     }
 
     @Test

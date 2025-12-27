@@ -1,4 +1,4 @@
-import { Container, Title, Button, TextInput, Group, Stack, Paper, Select, NumberInput, Modal, Table, Checkbox, ActionIcon } from '@mantine/core';
+import { Container, Title, Button, TextInput, Group, Stack, Paper, Select, NumberInput, Modal, Table, Checkbox, ActionIcon, SimpleGrid } from '@mantine/core';
 import { IconEdit, IconTrash } from '@tabler/icons-react';
 import { useForm } from '@mantine/form';
 import { useDisclosure } from '@mantine/hooks';
@@ -337,17 +337,20 @@ function WorkflowEditor() {
                 </Stack>
             )}
 
-            <Modal opened={opened} onClose={close} title={editingIndex !== null ? "Edit Stage" : "Add Stage"}>
+            <Modal opened={opened} onClose={close} title={editingIndex !== null ? "Edit Stage" : "Add Stage"} size="lg">
                 <form onSubmit={stageForm.onSubmit(handleStageSubmit)}>
                     <Stack>
-                        <TextInput label="Stage Name" required {...stageForm.getInputProps('stageName')} />
-                        <TextInput label="Stage Code" required {...stageForm.getInputProps('stageCode')} />
-                        <NumberInput label="Sequence Order" required min={1} {...stageForm.getInputProps('sequenceOrder')} />
-
-                        <Checkbox
-                            label="Is Nested Workflow?"
-                            {...stageForm.getInputProps('isNestedWorkflow', { type: 'checkbox' })}
-                        />
+                        <SimpleGrid cols={2}>
+                            <TextInput label="Stage Name" required {...stageForm.getInputProps('stageName')} />
+                            <TextInput label="Stage Code" required {...stageForm.getInputProps('stageCode')} />
+                            <NumberInput label="Sequence Order" required min={1} {...stageForm.getInputProps('sequenceOrder')} />
+                            <Group align="flex-end">
+                                <Checkbox
+                                    label="Is Nested Workflow?"
+                                    {...stageForm.getInputProps('isNestedWorkflow', { type: 'checkbox' })}
+                                />
+                            </Group>
+                        </SimpleGrid>
 
                         {stageForm.values.isNestedWorkflow && (
                             <TextInput
@@ -360,23 +363,27 @@ function WorkflowEditor() {
 
                         {!stageForm.values.isNestedWorkflow && (
                             <>
-                                <Select
-                                    label="Screen Implementation"
-                                    placeholder="Select Screen"
-                                    data={screens.map(s => ({ value: s.screenCode, label: `${s.description} (${s.screenCode})` }))}
-                                    {...stageForm.getInputProps('screenCode')}
-                                />
-                                <Select
-                                    label="Access Type"
-                                    data={['EDITABLE', 'READ_ONLY']}
-                                    {...stageForm.getInputProps('accessType')}
-                                />
+                                <SimpleGrid cols={2}>
+                                    <Select
+                                        label="Screen Implementation"
+                                        placeholder="Select Screen"
+                                        data={screens.map(s => ({ value: s.screenCode, label: `${s.description} (${s.screenCode})` }))}
+                                        {...stageForm.getInputProps('screenCode')}
+                                    />
+                                    <Select
+                                        label="Access Type"
+                                        data={['EDITABLE', 'READ_ONLY']}
+                                        {...stageForm.getInputProps('accessType')}
+                                    />
+                                </SimpleGrid>
 
                                 <Title order={5} mt="sm">Hooks (Flowable Listeners)</Title>
-                                <TextInput label="Pre-Entry Class (ExecutionListener: start)" placeholder="com.example.MyStartListener" {...stageForm.getInputProps('preEntryHook')} />
-                                <TextInput label="Post-Entry Class (TaskListener: create)" placeholder="com.example.MyCreateListener" {...stageForm.getInputProps('postEntryHook')} />
-                                <TextInput label="Pre-Exit Class (TaskListener: complete)" placeholder="com.example.MyCompleteListener" {...stageForm.getInputProps('preExitHook')} />
-                                <TextInput label="Post-Exit Class (ExecutionListener: end)" placeholder="com.example.MyEndListener" {...stageForm.getInputProps('postExitHook')} />
+                                <SimpleGrid cols={2}>
+                                    <TextInput label="Pre-Entry Class (ExecutionListener: start)" placeholder="com.example.MyStartListener" {...stageForm.getInputProps('preEntryHook')} />
+                                    <TextInput label="Post-Entry Class (TaskListener: create)" placeholder="com.example.MyCreateListener" {...stageForm.getInputProps('postEntryHook')} />
+                                    <TextInput label="Pre-Exit Class (TaskListener: complete)" placeholder="com.example.MyCompleteListener" {...stageForm.getInputProps('preExitHook')} />
+                                    <TextInput label="Post-Exit Class (ExecutionListener: end)" placeholder="com.example.MyEndListener" {...stageForm.getInputProps('postExitHook')} />
+                                </SimpleGrid>
 
                                 <Title order={5} mt="sm">Outcome Actions</Title>
                                 <TextInput

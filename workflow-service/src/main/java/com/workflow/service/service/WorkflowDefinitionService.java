@@ -10,6 +10,10 @@ import com.workflow.service.repository.AuditTrailRepository;
 import com.workflow.service.repository.ScreenMappingRepository;
 import com.workflow.service.repository.StageConfigRepository;
 import com.workflow.service.repository.WorkflowMasterRepository;
+import org.flowable.engine.HistoryService;
+import org.flowable.engine.RuntimeService;
+import com.workflow.service.dto.WorkflowStatsDTO;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,6 +33,8 @@ public class WorkflowDefinitionService {
     private final com.workflow.service.repository.ScreenDefinitionRepository screenDefinitionRepository;
     private final AuditTrailRepository auditTrailRepository;
     private final ObjectMapper objectMapper;
+    private final RuntimeService runtimeService;
+    private final HistoryService historyService;
 
     // Workflow Master CRUD
 
@@ -44,8 +50,50 @@ public class WorkflowDefinitionService {
         return workflowRepository.findAll();
     }
 
+    public List<WorkflowStatsDTO> getWorkflowStats() {
+        return workflowRepository.findAll().stream().map(w -> {
+            long active = 0;
+            long completed = 0;
+            // Only query if not deleted? Or query anyway to show historical capabilities?
+            // User query: "how many active tasks are running on each workflow and how many
+            // completed cases"
+            // We use the Workflow Code (Process Definition Key)
+            try {
+                if (w.getWorkflowCode() != null) {
+                    active = runtimeService.createProcessInstanceQuery()
+                            .processDefinitionKey(w.getWorkflowCode())
+                            .active()
+                            .count();
+                    completed = historyService.createHistoricProcessInstanceQuery()
+                            .processDefinitionKey(w.getWorkflowCode())
+                            .finished()
+                            .count();
+                }
+            } catch (Exception e) {
+                log.warn("Failed to fetch stats for workflow: {}", w.getWorkflowCode(), e);
+            }
+
+            return WorkflowStatsDTO.builder()
+                    .workflowCode(w.getWorkflowCode())
+                    .workflowName(w.getWorkflowName())
+                    .associatedModule(w.getAssociatedModule())
+                    .status(w.getStatus())
+                    .activeInstances(active)
+                    .completedInstances(completed)
+                    .build();
+        }).collect(Collectors.toList());
+    }
+
     public Optional<WorkflowMaster> getWorkflow(String code) {
         return workflowRepository.findByWorkflowCode(code);
+    }
+
+    @Transactional
+    public void markWorkflowAsDeleted(String code) {
+        workflowRepository.findByWorkflowCode(code).ifPresent(w -> {
+            w.setStatus("DELETED");
+            workflowRepository.save(w);
+        });
     }
 
     // Stage Config CRUD

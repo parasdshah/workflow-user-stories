@@ -181,7 +181,6 @@ function TaskInbox() {
                                                     <Text size="sm" fw={500}>{t.stageName}</Text>
                                                     <Badge variant="outline" size="sm">{t.assignee || 'Unassigned'}</Badge>
                                                     <Text size="xs" c="dimmed">End: {t.endTime ? new Date(t.endTime).toLocaleString() : '-'}</Text>
-                                                    <Text size="xs" c="dimmed">End: {t.endTime ? new Date(t.endTime).toLocaleString() : '-'}</Text>
                                                     {t.actionTaken && (
                                                         <Badge
                                                             size="xs"

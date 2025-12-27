@@ -24,6 +24,9 @@ public class WorkflowMaster {
 
     private String associatedModule;
 
+    @Column(nullable = false)
+    private String status = "ACTIVE"; // ACTIVE, DELETED
+
     // SLA in days (e.g. 0.5, 1.0)
     private BigDecimal slaDurationDays;
 

@@ -45,6 +45,11 @@ public class WorkflowController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @GetMapping("/stats")
+    public ResponseEntity<List<com.workflow.service.dto.WorkflowStatsDTO>> getWorkflowStats() {
+        return ResponseEntity.ok(workflowService.getWorkflowStats());
+    }
+
     // Stage Endpoints
     @PostMapping("/{code}/stages")
     public ResponseEntity<?> addStage(@PathVariable String code,

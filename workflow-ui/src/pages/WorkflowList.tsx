@@ -1,4 +1,4 @@
-import { Container, Title, Button, Group, Table } from '@mantine/core';
+import { Container, Title, Button, Group, Table, Badge, Indicator } from '@mantine/core';
 import { IconPlus, IconPlayerPlay } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
@@ -13,24 +13,31 @@ interface WorkflowMaster {
 
 function WorkflowList() {
     const navigate = useNavigate();
-    const [workflows, setWorkflows] = useState<WorkflowMaster[]>([]);
+    interface WorkflowStats {
+        workflowCode: string;
+        workflowName: string;
+        associatedModule: string;
+        status: string;
+        activeInstances: number;
+        completedInstances: number;
+    }
+
+    const [stats, setStats] = useState<WorkflowStats[]>([]);
     const [startModalOpen, setStartModalOpen] = useState(false);
     const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowMaster | null>(null);
 
     useEffect(() => {
-        fetch('/api/workflows')
+        // Fetch Stats (which includes all info we need)
+        fetch('/api/workflows/stats')
             .then(res => {
-                if (!res.ok) throw new Error('Failed to fetch workflows');
+                if (!res.ok) throw new Error('Failed to fetch workflow stats');
                 return res.json();
             })
-            .then(data => setWorkflows(data))
-            .catch(err => console.error("Error fetching workflows:", err));
+            .then(data => setStats(data))
+            .catch(err => console.error("Error fetching stats:", err));
     }, []);
 
-    const handleOpenStartModal = (wf: WorkflowMaster) => {
-        setSelectedWorkflow(wf);
-        setStartModalOpen(true);
-    };
+
 
     return (
         <Container size="xl" py="xl">
@@ -44,17 +51,33 @@ function WorkflowList() {
                 <Table.Thead>
                     <Table.Tr>
                         <Table.Th>Name</Table.Th>
-                        <Table.Th>Code</Table.Th>
+                        <Table.Th>Status</Table.Th>
                         <Table.Th>Module</Table.Th>
+                        <Table.Th>Active</Table.Th>
+                        <Table.Th>Completed</Table.Th>
                         <Table.Th>Actions</Table.Th>
                     </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                    {workflows.map((wf) => (
-                        <Table.Tr key={wf.workflowCode}>
-                            <Table.Td>{wf.workflowName}</Table.Td>
-                            <Table.Td>{wf.workflowCode}</Table.Td>
+                    {stats.map((wf) => (
+                        <Table.Tr key={wf.workflowCode} style={{ opacity: wf.status === 'DELETED' ? 0.6 : 1 }}>
+                            <Table.Td>
+                                <Group gap="xs">
+                                    <Indicator color={wf.status === 'ACTIVE' ? 'green' : 'gray'} position="middle-start" size={8} offset={-4}>
+                                        <span style={{ marginLeft: 10 }}>{wf.workflowName}</span>
+                                    </Indicator>
+                                </Group>
+                            </Table.Td>
+                            <Table.Td>
+                                <Badge size="xs" color={wf.status === 'ACTIVE' ? 'green' : 'gray'}>{wf.status}</Badge>
+                            </Table.Td>
                             <Table.Td>{wf.associatedModule}</Table.Td>
+                            <Table.Td>
+                                <Badge color="blue" variant="light">{wf.activeInstances}</Badge>
+                            </Table.Td>
+                            <Table.Td>
+                                <Badge color="green" variant="light">{wf.completedInstances}</Badge>
+                            </Table.Td>
                             <Table.Td>
                                 <Group gap="xs">
                                     <Button variant="subtle" size="xs" onClick={() => navigate(`/edit/${wf.workflowCode}`)}>Edit</Button>
@@ -63,8 +86,12 @@ function WorkflowList() {
                                         variant="filled"
                                         color="blue"
                                         size="xs"
+                                        disabled={wf.status !== 'ACTIVE'}
                                         leftSection={<IconPlayerPlay size={14} />}
-                                        onClick={() => handleOpenStartModal(wf)}
+                                        onClick={() => {
+                                            setSelectedWorkflow({ id: 0, ...wf }); // Quick map to match Master interface
+                                            setStartModalOpen(true);
+                                        }}
                                     >
                                         Start
                                     </Button>
@@ -72,7 +99,7 @@ function WorkflowList() {
                             </Table.Td>
                         </Table.Tr>
                     ))}
-                    {workflows.length === 0 && (
+                    {stats.length === 0 && (
                         <Table.Tr>
                             <Table.Td colSpan={4} align="center">No workflows found. Create one!</Table.Td>
                         </Table.Tr>
