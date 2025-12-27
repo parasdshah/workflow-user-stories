@@ -46,4 +46,7 @@ public class StageConfig {
     @Column(columnDefinition = "TEXT") // JSON or Comma-Separated
     private String allowedActions; // e.g. ["APPROVE", "REJECT"]
 
+    // T. Parallel Stages
+    private String parallelGrouping;
+
 }

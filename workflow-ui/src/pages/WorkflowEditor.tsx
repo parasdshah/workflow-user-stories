@@ -1,9 +1,10 @@
-import { Container, Title, Button, TextInput, Group, Stack, Paper, Select, NumberInput, Modal, Table, Checkbox, ActionIcon, SimpleGrid } from '@mantine/core';
-import { IconEdit, IconTrash } from '@tabler/icons-react';
+import { Container, Title, Button, TextInput, Group, Stack, Paper, Select, NumberInput, Modal, Table, Checkbox, ActionIcon, SimpleGrid, Tabs } from '@mantine/core';
+import { IconEdit, IconTrash, IconGitBranch } from '@tabler/icons-react';
 import { useForm } from '@mantine/form';
 import { useDisclosure } from '@mantine/hooks';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import { BpmnVisualizer } from '../components/bpmn/BpmnVisualizer';
 
 // Define types locally or import from a shared types file
 interface StageConfig {
@@ -21,6 +22,7 @@ interface StageConfig {
     preExitHook?: string;   // New
     postExitHook?: string;
     allowedActions?: string; // e.g. "APPROVE,REJECT"
+    parallelGrouping?: string; // New
 }
 
 interface ScreenDefinition {
@@ -59,7 +61,8 @@ function WorkflowEditor() {
             postEntryHook: '',
             preExitHook: '',
             postExitHook: '',
-            allowedActions: ''
+            allowedActions: '',
+            parallelGrouping: ''
         }
     });
 
@@ -113,7 +116,8 @@ function WorkflowEditor() {
             postEntryHook: stage.postEntryHook || '',
             preExitHook: stage.preExitHook || '',
             postExitHook: stage.postExitHook || '',
-            allowedActions: stage.allowedActions || ''
+            allowedActions: stage.allowedActions || '',
+            parallelGrouping: stage.parallelGrouping || ''
         });
 
         // Fetch existing mapping if we don't have it locally (e.g. page reload)
@@ -271,71 +275,85 @@ function WorkflowEditor() {
             </Group>
 
             <Paper withBorder p="md">
-                <Stack>
-                    <TextInput label="Workflow Name" required {...form.getInputProps('workflowName')} />
-                    <TextInput label="Workflow Code" required disabled={!!code} {...form.getInputProps('workflowCode')} />
-                    <Select
-                        label="Module"
-                        data={['Overall', 'Credit Initiation', 'Financial Spreading', 'Credit Rating', 'Credit Approval', 'Sales', 'HR', 'Finance']}
-                        {...form.getInputProps('associatedModule')}
-                    />
-                    <NumberInput
-                        label="SLA (Days)"
-                        min={0}
-                        decimalScale={1}
-                        step={0.5}
-                        {...form.getInputProps('slaDurationDays')}
-                    />
-                </Stack>
+                <Tabs defaultValue="config">
+                    <Tabs.List mb="md">
+                        <Tabs.Tab value="config" leftSection={<IconEdit size={14} />}>Configuration</Tabs.Tab>
+                        <Tabs.Tab value="diagram" leftSection={<IconGitBranch size={14} />}>Diagram</Tabs.Tab>
+                    </Tabs.List>
+
+                    <Tabs.Panel value="config">
+                        <Stack>
+                            <TextInput label="Workflow Name" required {...form.getInputProps('workflowName')} />
+                            <TextInput label="Workflow Code" required disabled={!!code} {...form.getInputProps('workflowCode')} />
+                            <Select
+                                label="Module"
+                                data={['Overall', 'Credit Initiation', 'Financial Spreading', 'Credit Rating', 'Credit Approval', 'Sales', 'HR', 'Finance']}
+                                {...form.getInputProps('associatedModule')}
+                            />
+                            <NumberInput
+                                label="SLA (Days)"
+                                min={0}
+                                decimalScale={1}
+                                step={0.5}
+                                {...form.getInputProps('slaDurationDays')}
+                            />
+                        </Stack>
+
+                        {code && (
+                            <Stack mt="xl">
+                                <Group justify="space-between">
+                                    <Title order={3}>Stages</Title>
+                                    <Button variant="light" onClick={openAddModal}>Add Stage</Button>
+                                </Group>
+
+                                <Paper withBorder p="sm">
+                                    <Table>
+                                        <Table.Thead>
+                                            <Table.Tr>
+                                                <Table.Th>Sequence</Table.Th>
+                                                <Table.Th>Name</Table.Th>
+                                                <Table.Th>Code</Table.Th>
+                                                <Table.Th>Is Nested?</Table.Th>
+                                                <Table.Th>Nested Code</Table.Th>
+                                                <Table.Th>Screen</Table.Th>
+                                                <Table.Th>Actions</Table.Th>
+                                                <Table.Th>Actions</Table.Th>
+                                            </Table.Tr>
+                                        </Table.Thead>
+                                        <Table.Tbody>
+                                            {stages.sort((a, b) => a.sequenceOrder - b.sequenceOrder).map((s, index) => (
+                                                <Table.Tr key={s.stageCode}>
+                                                    <Table.Td>{s.sequenceOrder}</Table.Td>
+                                                    <Table.Td>{s.stageName}</Table.Td>
+                                                    <Table.Td>{s.stageCode}</Table.Td>
+                                                    <Table.Td>{s.isNestedWorkflow ? 'Yes' : 'No'}</Table.Td>
+                                                    <Table.Td>{s.nestedWorkflowCode || '-'}</Table.Td>
+                                                    <Table.Td>{s.screenCode || '-'}</Table.Td>
+                                                    <Table.Td>{s.allowedActions || '-'}</Table.Td>
+                                                    <Table.Td>
+                                                        <Group gap="xs">
+                                                            <ActionIcon variant="subtle" color="blue" onClick={() => openEditModal(index)}>
+                                                                <IconEdit size={16} />
+                                                            </ActionIcon>
+                                                            <ActionIcon variant="subtle" color="red" onClick={() => handleDeleteStage(index)}>
+                                                                <IconTrash size={16} />
+                                                            </ActionIcon>
+                                                        </Group>
+                                                    </Table.Td>
+                                                </Table.Tr>
+                                            ))}
+                                        </Table.Tbody>
+                                    </Table>
+                                </Paper>
+                            </Stack>
+                        )}
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="diagram">
+                        <BpmnVisualizer stages={stages} workflow={form.values} />
+                    </Tabs.Panel>
+                </Tabs>
             </Paper>
-
-            {code && (
-                <Stack mt="xl">
-                    <Group justify="space-between">
-                        <Title order={3}>Stages</Title>
-                        <Button variant="light" onClick={openAddModal}>Add Stage</Button>
-                    </Group>
-
-                    <Paper withBorder p="sm">
-                        <Table>
-                            <Table.Thead>
-                                <Table.Tr>
-                                    <Table.Th>Sequence</Table.Th>
-                                    <Table.Th>Name</Table.Th>
-                                    <Table.Th>Code</Table.Th>
-                                    <Table.Th>Is Nested?</Table.Th>
-                                    <Table.Th>Nested Code</Table.Th>
-                                    <Table.Th>Screen</Table.Th>
-                                    <Table.Th>Actions</Table.Th>
-                                </Table.Tr>
-                            </Table.Thead>
-                            <Table.Tbody>
-                                {stages.sort((a, b) => a.sequenceOrder - b.sequenceOrder).map((s, index) => (
-                                    <Table.Tr key={s.stageCode}>
-                                        <Table.Td>{s.sequenceOrder}</Table.Td>
-                                        <Table.Td>{s.stageName}</Table.Td>
-                                        <Table.Td>{s.stageCode}</Table.Td>
-                                        <Table.Td>{s.isNestedWorkflow ? 'Yes' : 'No'}</Table.Td>
-                                        <Table.Td>{s.nestedWorkflowCode || '-'}</Table.Td>
-                                        <Table.Td>{s.screenCode || '-'}</Table.Td>
-                                        <Table.Td>{s.allowedActions || '-'}</Table.Td>
-                                        <Table.Td>
-                                            <Group gap="xs">
-                                                <ActionIcon variant="subtle" color="blue" onClick={() => openEditModal(index)}>
-                                                    <IconEdit size={16} />
-                                                </ActionIcon>
-                                                <ActionIcon variant="subtle" color="red" onClick={() => handleDeleteStage(index)}>
-                                                    <IconTrash size={16} />
-                                                </ActionIcon>
-                                            </Group>
-                                        </Table.Td>
-                                    </Table.Tr>
-                                ))}
-                            </Table.Tbody>
-                        </Table>
-                    </Paper>
-                </Stack>
-            )}
 
             <Modal opened={opened} onClose={close} title={editingIndex !== null ? "Edit Stage" : "Add Stage"} size="lg">
                 <form onSubmit={stageForm.onSubmit(handleStageSubmit)}>
@@ -351,6 +369,20 @@ function WorkflowEditor() {
                                 />
                             </Group>
                         </SimpleGrid>
+
+                        {/* Parallel Configuration */}
+                        <Paper withBorder p="xs" bg="gray.0">
+                            <Title order={6} mb="xs">Execution Mode</Title>
+                            <Group align="flex-end">
+                                <TextInput
+                                    label="Parallel Group ID"
+                                    placeholder="e.g. GROUP_A"
+                                    description="Assign same ID & Sequence to run in parallel"
+                                    style={{ flex: 1 }}
+                                    {...stageForm.getInputProps('parallelGrouping')}
+                                />
+                            </Group>
+                        </Paper>
 
                         {stageForm.values.isNestedWorkflow && (
                             <TextInput

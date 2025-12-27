@@ -176,4 +176,45 @@ class BpmnGeneratorServiceTest {
         assertTrue(xml.contains("com.hooks.PostExit"));
         assertTrue(xml.contains("end"));
     }
+
+    @Test
+    void testGenerateWithParallelStages() {
+        WorkflowMaster workflow = new WorkflowMaster();
+        workflow.setWorkflowCode("PARALLEL_FLOW");
+        workflow.setWorkflowName("Parallel Flow");
+
+        StageConfig stage1 = new StageConfig();
+        stage1.setStageCode("A1");
+        stage1.setStageName("Parallel A");
+        stage1.setSequenceOrder(1);
+        stage1.setParallelGrouping("GROUP_A");
+
+        StageConfig stage2 = new StageConfig();
+        stage2.setStageCode("A2");
+        stage2.setStageName("Parallel B");
+        stage2.setSequenceOrder(1);
+        stage2.setParallelGrouping("GROUP_A");
+
+        // Sequence 2 (Single)
+        StageConfig stage3 = new StageConfig();
+        stage3.setStageCode("B");
+        stage3.setStageName("Next Stage");
+        stage3.setSequenceOrder(2);
+
+        when(screenMappingRepository.findByStageCode(Mockito.anyString())).thenReturn(Collections.emptyList());
+
+        String xml = bpmnGeneratorService.generateBpmnXml(workflow, java.util.Arrays.asList(stage1, stage2, stage3));
+
+        System.out.println(xml);
+
+        assertTrue(xml.contains("parallelGateway id=\"split_1\""), "Should contain Split Gateway");
+        assertTrue(xml.contains("parallelGateway id=\"join_1\""), "Should contain Join Gateway");
+
+        // Check flows
+        assertTrue(xml.contains("sourceRef=\"split_1\" targetRef=\"A1\""));
+        assertTrue(xml.contains("sourceRef=\"split_1\" targetRef=\"A2\""));
+        assertTrue(xml.contains("sourceRef=\"A1\" targetRef=\"join_1\""));
+        assertTrue(xml.contains("sourceRef=\"A2\" targetRef=\"join_1\""));
+        assertTrue(xml.contains("sourceRef=\"join_1\" targetRef=\"B\""));
+    }
 }

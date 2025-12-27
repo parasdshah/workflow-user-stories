@@ -37,76 +37,55 @@ public class BpmnGeneratorService {
 
         FlowElement previousElement = startEvent;
 
-        for (StageConfig stage : stages) {
-            FlowElement stageElement;
-            if (stage.isNestedWorkflow()) {
-                CallActivity callActivity = new CallActivity();
-                callActivity.setCalledElement(stage.getNestedWorkflowCode());
-                stageElement = callActivity;
+        // Sort stages by sequence
+        stages.sort((s1, s2) -> s1.getSequenceOrder().compareTo(s2.getSequenceOrder()));
+
+        // Group stages by Sequence Order + Parallel Grouping
+        List<List<StageConfig>> groupedStages = groupStages(stages);
+
+        for (List<StageConfig> group : groupedStages) {
+            if (group.isEmpty())
+                continue;
+
+            if (group.size() == 1) {
+                // Single Stage (Standard Flow)
+                StageConfig stage = group.get(0);
+                FlowElement stageElement = createStageElement(process, stage, workflow);
+                process.addFlowElement(stageElement);
+
+                connect(process, previousElement, stageElement);
+
+                // Handle SLA (Timer -> Notification -> End)
+                // Note: For parallel, SLA is tricky. We'll attach to the individual task.
+                addSlaIfConfigured(process, stageElement, stage, workflow);
+
+                previousElement = stageElement;
             } else {
-                UserTask userTask = new UserTask();
-                // Requirement G.2: Use mapped screen code as form key
-                String formKey = getFormKeyForStage(stage.getStageCode());
-                userTask.setFormKey(formKey);
-                stageElement = userTask;
-            }
+                // Parallel Block
+                ParallelGateway split = new ParallelGateway();
+                split.setId("split_" + group.get(0).getSequenceOrder());
+                process.addFlowElement(split);
+                connect(process, previousElement, split);
 
-            stageElement.setId(stage.getStageCode());
-            stageElement.setName(stage.getStageName());
+                ParallelGateway join = new ParallelGateway();
+                join.setId("join_" + group.get(0).getSequenceOrder());
+                process.addFlowElement(join);
 
-            // Hooks (Listeners) - Requirement G.4 & B.3
-            // 1. Pre-Entry (ExecutionListener - start)
-            if (stage.getPreEntryHook() != null && !stage.getPreEntryHook().isBlank()) {
-                stageElement.setExecutionListeners(List.of(createListener(stage.getPreEntryHook(), "start")));
-            }
-            // 2. Post-Exit (ExecutionListener - end)
-            if (stage.getPostExitHook() != null && !stage.getPostExitHook().isBlank()) {
-                stageElement.setExecutionListeners(List.of(createListener(stage.getPostExitHook(), "end")));
-            }
+                for (StageConfig stage : group) {
+                    FlowElement stageElement = createStageElement(process, stage, workflow);
+                    process.addFlowElement(stageElement);
 
-            // 3. Post-Entry & Pre-Exit (TaskListeners) - Only for UserTask
-            if (stageElement instanceof UserTask) {
-                UserTask userTask = (UserTask) stageElement;
-                if (stage.getPostEntryHook() != null && !stage.getPostEntryHook().isBlank()) {
-                    // postEntry -> create event
-                    FlowableListener listener = createListener(stage.getPostEntryHook(), "create");
-                    userTask.getTaskListeners().add(listener);
+                    connect(process, split, stageElement);
+                    connect(process, stageElement, join);
+
+                    addSlaIfConfigured(process, stageElement, stage, workflow);
                 }
-                if (stage.getPreExitHook() != null && !stage.getPreExitHook().isBlank()) {
-                    // preExit -> complete event
-                    FlowableListener listener = createListener(stage.getPreExitHook(), "complete");
-                    userTask.getTaskListeners().add(listener);
-                }
+
+                previousElement = join;
             }
-
-            process.addFlowElement(stageElement);
-
-            // Sequence Flow
-            SequenceFlow flow = new SequenceFlow();
-            flow.setSourceRef(previousElement.getId());
-            flow.setTargetRef(stageElement.getId());
-            process.addFlowElement(flow);
-
-            // Requirement G.5: SLA Timer Boundary Event
-            BigDecimal slaDays = stage.getSlaDurationDays();
-            if (slaDays == null || slaDays.compareTo(BigDecimal.ZERO) <= 0) {
-                // Fallback to global workflow SLA
-                if (workflow.getSlaDurationDays() != null
-                        && workflow.getSlaDurationDays().compareTo(BigDecimal.ZERO) > 0) {
-                    slaDays = workflow.getSlaDurationDays();
-                }
-            }
-
-            if (slaDays != null && slaDays.compareTo(BigDecimal.ZERO) > 0) {
-                if (stageElement instanceof UserTask) {
-                    addSlaTimer(process, (UserTask) stageElement, slaDays);
-                }
-            }
-
-            previousElement = stageElement;
         }
 
-        // Requirement G.6: Completion Mapping
+        // Completion Mapping
         if (workflow.getCompletionApiEndpoint() != null && !workflow.getCompletionApiEndpoint().isBlank()) {
             ServiceTask completionTask = new ServiceTask();
             completionTask.setId("completionServiceTask");
@@ -115,12 +94,7 @@ public class BpmnGeneratorService {
             completionTask.setImplementation("${completionService}");
 
             process.addFlowElement(completionTask);
-
-            SequenceFlow toCompletion = new SequenceFlow();
-            toCompletion.setSourceRef(previousElement.getId());
-            toCompletion.setTargetRef(completionTask.getId());
-            process.addFlowElement(toCompletion);
-
+            connect(process, previousElement, completionTask);
             previousElement = completionTask;
         }
 
@@ -128,19 +102,89 @@ public class BpmnGeneratorService {
         EndEvent endEvent = new EndEvent();
         endEvent.setId("end");
         process.addFlowElement(endEvent);
+        connect(process, previousElement, endEvent);
 
-        SequenceFlow endFlow = new SequenceFlow();
-        endFlow.setSourceRef(previousElement.getId());
-        endFlow.setTargetRef(endEvent.getId());
-        process.addFlowElement(endFlow);
-
-        // Auto Layout (Generate DI)
+        // Auto Layout
         new BpmnAutoLayout(model).execute();
 
-        // Convert to XML
         BpmnXMLConverter converter = new BpmnXMLConverter();
         byte[] bytes = converter.convertToXML(model);
         return new String(bytes);
+    }
+
+    private List<List<StageConfig>> groupStages(List<StageConfig> stages) {
+        // Group by Sequence ID. If 'parallelGrouping' is set, verify consistency.
+        // Simple Logic: Iterate and group by sequence.
+        List<List<StageConfig>> groups = new java.util.ArrayList<>();
+        if (stages.isEmpty())
+            return groups;
+
+        java.util.Map<Integer, List<StageConfig>> map = new java.util.TreeMap<>(); // Sorted by sequence
+        for (StageConfig s : stages) {
+            map.computeIfAbsent(s.getSequenceOrder(), k -> new java.util.ArrayList<>()).add(s);
+        }
+        return new java.util.ArrayList<>(map.values());
+    }
+
+    private FlowElement createStageElement(Process process, StageConfig stage, WorkflowMaster workflow) {
+        FlowElement stageElement;
+        if (stage.isNestedWorkflow()) {
+            CallActivity callActivity = new CallActivity();
+            callActivity.setCalledElement(stage.getNestedWorkflowCode());
+            stageElement = callActivity;
+        } else {
+            UserTask userTask = new UserTask();
+            String formKey = getFormKeyForStage(stage.getStageCode());
+            userTask.setFormKey(formKey);
+            stageElement = userTask;
+        }
+
+        stageElement.setId(stage.getStageCode());
+        stageElement.setName(stage.getStageName());
+
+        applyHooks(stageElement, stage);
+        return stageElement;
+    }
+
+    private void applyHooks(FlowElement stageElement, StageConfig stage) {
+        if (stage.getPreEntryHook() != null && !stage.getPreEntryHook().isBlank()) {
+            stageElement.setExecutionListeners(List.of(createListener(stage.getPreEntryHook(), "start")));
+        }
+        if (stage.getPostExitHook() != null && !stage.getPostExitHook().isBlank()) {
+            stageElement.getExecutionListeners().add(createListener(stage.getPostExitHook(), "end"));
+        }
+
+        if (stageElement instanceof UserTask) {
+            UserTask userTask = (UserTask) stageElement;
+            if (stage.getPostEntryHook() != null && !stage.getPostEntryHook().isBlank()) {
+                userTask.getTaskListeners().add(createListener(stage.getPostEntryHook(), "create"));
+            }
+            if (stage.getPreExitHook() != null && !stage.getPreExitHook().isBlank()) {
+                userTask.getTaskListeners().add(createListener(stage.getPreExitHook(), "complete"));
+            }
+        }
+    }
+
+    private void connect(Process process, FlowElement source, FlowElement target) {
+        SequenceFlow flow = new SequenceFlow();
+        flow.setSourceRef(source.getId());
+        flow.setTargetRef(target.getId());
+        process.addFlowElement(flow);
+    }
+
+    private void addSlaIfConfigured(Process process, FlowElement stageElement, StageConfig stage,
+            WorkflowMaster workflow) {
+        BigDecimal slaDays = stage.getSlaDurationDays();
+        if (slaDays == null || slaDays.compareTo(BigDecimal.ZERO) <= 0) {
+            if (workflow.getSlaDurationDays() != null && workflow.getSlaDurationDays().compareTo(BigDecimal.ZERO) > 0) {
+                slaDays = workflow.getSlaDurationDays();
+            }
+        }
+        if (slaDays != null && slaDays.compareTo(BigDecimal.ZERO) > 0) {
+            if (stageElement instanceof UserTask) {
+                addSlaTimer(process, (UserTask) stageElement, slaDays);
+            }
+        }
     }
 
     private String getFormKeyForStage(String stageCode) {
