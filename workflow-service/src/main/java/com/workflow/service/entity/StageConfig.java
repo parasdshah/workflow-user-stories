@@ -49,4 +49,13 @@ public class StageConfig {
     // T. Parallel Stages
     private String parallelGrouping;
 
+    // V. Rule Stage Integration
+    @com.fasterxml.jackson.annotation.JsonProperty("isRuleStage")
+    private Boolean isRuleStage = false;
+
+    private String ruleKey;
+
+    public boolean isRuleStage() {
+        return Boolean.TRUE.equals(this.isRuleStage);
+    }
 }

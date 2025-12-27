@@ -1,4 +1,4 @@
-import { Container, Title, Button, TextInput, Group, Stack, Paper, Select, NumberInput, Modal, Table, Checkbox, ActionIcon, SimpleGrid, Tabs } from '@mantine/core';
+import { Container, Title, Button, TextInput, Group, Stack, Paper, Select, NumberInput, Modal, Table, Checkbox, ActionIcon, SimpleGrid, Tabs, SegmentedControl, Text } from '@mantine/core';
 import { IconEdit, IconTrash, IconGitBranch } from '@tabler/icons-react';
 import { useForm } from '@mantine/form';
 import { useDisclosure } from '@mantine/hooks';
@@ -23,6 +23,8 @@ interface StageConfig {
     postExitHook?: string;
     allowedActions?: string; // e.g. "APPROVE,REJECT"
     parallelGrouping?: string; // New
+    isRuleStage?: boolean; // New
+    ruleKey?: string; // New
 }
 
 interface ScreenDefinition {
@@ -62,7 +64,9 @@ function WorkflowEditor() {
             preExitHook: '',
             postExitHook: '',
             allowedActions: '',
-            parallelGrouping: ''
+            parallelGrouping: '',
+            isRuleStage: false,
+            ruleKey: ''
         }
     });
 
@@ -117,7 +121,9 @@ function WorkflowEditor() {
             preExitHook: stage.preExitHook || '',
             postExitHook: stage.postExitHook || '',
             allowedActions: stage.allowedActions || '',
-            parallelGrouping: stage.parallelGrouping || ''
+            parallelGrouping: stage.parallelGrouping || '',
+            isRuleStage: stage.isRuleStage || false,
+            ruleKey: stage.ruleKey || ''
         });
 
         // Fetch existing mapping if we don't have it locally (e.g. page reload)
@@ -361,37 +367,63 @@ function WorkflowEditor() {
                         <SimpleGrid cols={2}>
                             <TextInput label="Stage Name" required {...stageForm.getInputProps('stageName')} />
                             <TextInput label="Stage Code" required {...stageForm.getInputProps('stageCode')} />
-                            <NumberInput label="Sequence Order" required min={1} {...stageForm.getInputProps('sequenceOrder')} />
-                            <Group align="flex-end">
-                                <Checkbox
-                                    label="Is Nested Workflow?"
-                                    {...stageForm.getInputProps('isNestedWorkflow', { type: 'checkbox' })}
-                                />
-                            </Group>
                         </SimpleGrid>
 
-                        {/* Parallel Configuration */}
-                        <Paper withBorder p="xs" bg="gray.0">
-                            <Title order={6} mb="xs">Execution Mode</Title>
-                            <Group align="flex-end">
-                                <TextInput
-                                    label="Parallel Group ID"
-                                    placeholder="e.g. GROUP_A"
-                                    description="Assign same ID & Sequence to run in parallel"
-                                    style={{ flex: 1 }}
-                                    {...stageForm.getInputProps('parallelGrouping')}
-                                />
-                            </Group>
+                        <NumberInput label="Sequence Order" required min={1} {...stageForm.getInputProps('sequenceOrder')} />
+
+                        {/* Stage Type Selector */}
+                        <Paper withBorder p="xs" mb="xs">
+                            <Text size="sm" fw={500} mb={5}>Stage Type</Text>
+                            <SegmentedControl
+                                value={
+                                    stageForm.values.isNestedWorkflow ? 'NESTED' :
+                                        stageForm.values.isRuleStage ? 'RULE' : 'USER'
+                                }
+                                onChange={(value) => {
+                                    stageForm.setFieldValue('isNestedWorkflow', value === 'NESTED');
+                                    stageForm.setFieldValue('isRuleStage', value === 'RULE');
+                                    if (value !== 'NESTED') stageForm.setFieldValue('nestedWorkflowCode', '');
+                                    if (value !== 'RULE') stageForm.setFieldValue('ruleKey', '');
+                                }}
+                                data={[
+                                    { label: 'User Task', value: 'USER' },
+                                    { label: 'Nested Workflow', value: 'NESTED' },
+                                    { label: 'Business Rule', value: 'RULE' },
+                                ]}
+                                fullWidth
+                            />
                         </Paper>
 
                         {stageForm.values.isNestedWorkflow && (
                             <TextInput
                                 label="Nested Workflow Code"
-                                placeholder="e.g. SUB_PROCESS_01"
+                                placeholder="WORKFLOW_CODE"
                                 required
                                 {...stageForm.getInputProps('nestedWorkflowCode')}
                             />
                         )}
+
+                        {stageForm.values.isRuleStage && (
+                            <TextInput
+                                label="Rule Key (Decision Table ID)"
+                                placeholder="e.g. RISK_RULE"
+                                description="The Key of the uploaded DMN table"
+                                required
+                                {...stageForm.getInputProps('ruleKey')}
+                            />
+                        )}
+
+                        {/* Parallel Configuration */}
+                        <Paper withBorder p="xs" bg="gray.0">
+                            <Title order={6} mb="xs">Execution Mode</Title>
+                            <TextInput
+                                label="Parallel Group ID"
+                                placeholder="e.g. GRP_APPROVAL"
+                                description="Stages with same Sequence & Group ID will run in parallel"
+                                {...stageForm.getInputProps('parallelGrouping')}
+                            />
+                        </Paper>
+
 
                         {!stageForm.values.isNestedWorkflow && (
                             <>

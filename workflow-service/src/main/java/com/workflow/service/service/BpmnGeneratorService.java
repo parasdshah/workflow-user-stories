@@ -132,6 +132,14 @@ public class BpmnGeneratorService {
             CallActivity callActivity = new CallActivity();
             callActivity.setCalledElement(stage.getNestedWorkflowCode());
             stageElement = callActivity;
+        } else if (stage.isRuleStage()) {
+            ServiceTask ruleTask = new ServiceTask();
+            ruleTask.setType("dmn");
+            FieldExtension prevField = new FieldExtension();
+            prevField.setFieldName("decisionTableReferenceKey");
+            prevField.setStringValue(stage.getRuleKey());
+            ruleTask.getFieldExtensions().add(prevField);
+            stageElement = ruleTask;
         } else {
             UserTask userTask = new UserTask();
             String formKey = getFormKeyForStage(stage.getStageCode());

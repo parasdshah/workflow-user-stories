@@ -9814,3 +9814,6 @@ select wm1_0.id,wm1_0.associated_module,wm1_0.completion_api_endpoint,wm1_0.crea
 	at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:659)
 	at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:63)
 	at java.base/java.lang.Thread.run(Thread.java:840)
+2025-12-28 00:25:04.641901+05:30 jdbc[3]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "ACT_DMN_DATABASECHANGELOGLOCK" not found; SQL statement:
+SELECT COUNT(*) FROM PUBLIC.ACT_DMN_DATABASECHANGELOGLOCK [42102-224]

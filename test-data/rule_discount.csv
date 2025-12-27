@@ -1,0 +1,5 @@
+IN:orderTotal,IN:customerType,OUT:discountPercent
+> 5000,VIP,20
+> 1000,VIP,10
+> 5000,REGULAR,5
+<= 5000,REGULAR,0

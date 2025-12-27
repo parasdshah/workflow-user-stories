@@ -1,0 +1,5 @@
+IN:loanAmount,IN:creditScore,OUT:riskLevel,OUT:requiresSupervisor
+< 1000,>= 700,LOW,false
+>= 1000,>= 700,MEDIUM,false
+ANY,< 700,HIGH,true
+>= 50000,>= 700,HIGH,true
