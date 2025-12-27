@@ -252,6 +252,34 @@ public class CaseService {
             dto.setEndTime(LocalDateTime.ofInstant(task.getEndTime().toInstant(), ZoneId.systemDefault()));
         }
 
+        // Fetch Parent Case ID for History Grouping
+        try {
+            HistoricProcessInstance hpi = historyService.createHistoricProcessInstanceQuery()
+                    .processInstanceId(task.getProcessInstanceId())
+                    .singleResult();
+            if (hpi != null && hpi.getSuperProcessInstanceId() != null) {
+                dto.setParentCaseId(hpi.getSuperProcessInstanceId());
+
+                // Fetch Parent Process Instance to get Definition ID
+                HistoricProcessInstance parentProcess = historyService.createHistoricProcessInstanceQuery()
+                        .processInstanceId(hpi.getSuperProcessInstanceId())
+                        .singleResult();
+
+                if (parentProcess != null) {
+                    org.flowable.engine.repository.ProcessDefinition parentPd = repositoryService
+                            .createProcessDefinitionQuery()
+                            .processDefinitionId(parentProcess.getProcessDefinitionId())
+                            .singleResult();
+                    if (parentPd != null) {
+                        dto.setParentWorkflowCode(parentPd.getKey());
+                        dto.setParentWorkflowName(parentPd.getName());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Ignore if fails, just grouping enhancement
+        }
+
         // Map outcome to actionTaken from local variables
         if (task.getTaskLocalVariables() != null && task.getTaskLocalVariables().containsKey("outcome")) {
             dto.setActionTaken((String) task.getTaskLocalVariables().get("outcome"));

@@ -28,6 +28,9 @@ interface HistoricStageDto {
     caseId: string;
     workflowCode: string;
     actionTaken?: string;
+    parentCaseId?: string;
+    parentWorkflowCode?: string;
+    parentWorkflowName?: string;
 }
 
 function TaskInbox() {
@@ -90,11 +93,13 @@ function TaskInbox() {
     // Group history by Case for better view
     // Group history by Case for better view
     const groupedHistory = Array.isArray(history) ? history.reduce((acc, stage) => {
-        if (!stage.caseId) return acc; // Skip if no caseId
-        if (!acc[stage.caseId]) {
-            acc[stage.caseId] = [];
+        const groupKey = stage.parentCaseId || stage.caseId; // Group by Parent ID if exists to show Overall context
+
+        if (!groupKey) return acc;
+        if (!acc[groupKey]) {
+            acc[groupKey] = [];
         }
-        acc[stage.caseId].push(stage);
+        acc[groupKey].push(stage);
         return acc;
     }, {} as { [key: string]: HistoricStageDto[] }) : {};
 
@@ -155,7 +160,14 @@ function TaskInbox() {
                                     <Accordion.Item key={caseId} value={caseId}>
                                         <Accordion.Control>
                                             <Group justify="space-between" pr="md">
-                                                <Text fw={500}>{firstTask.workflowCode || 'Unknown Workflow'} (ID: {caseId})</Text>
+                                                <div>
+                                                    <Text fw={500}>
+                                                        {firstTask.parentCaseId
+                                                            ? (firstTask.parentWorkflowName || firstTask.parentWorkflowCode || 'Composite Case')
+                                                            : (firstTask.stageName ? `Case: ${firstTask.workflowCode}` : (firstTask.workflowCode || 'Unknown Workflow'))}
+                                                    </Text>
+                                                    <Text size="xs" c="dimmed">ID: {caseId}</Text>
+                                                </div>
                                                 <Group>
                                                     <Badge color="gray">Ended/History</Badge>
                                                     <Button size="xs" variant="light" component="a" href={`/cases/${caseId}`}>View Case</Button>

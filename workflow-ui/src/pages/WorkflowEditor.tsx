@@ -276,7 +276,7 @@ function WorkflowEditor() {
                     <TextInput label="Workflow Code" required disabled={!!code} {...form.getInputProps('workflowCode')} />
                     <Select
                         label="Module"
-                        data={['Sales', 'HR', 'Finance']}
+                        data={['Overall', 'Credit Initiation', 'Financial Spreading', 'Credit Rating', 'Credit Approval', 'Sales', 'HR', 'Finance']}
                         {...form.getInputProps('associatedModule')}
                     />
                     <NumberInput

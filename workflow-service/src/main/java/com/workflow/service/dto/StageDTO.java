@@ -18,4 +18,7 @@ public class StageDTO {
     private String allowedActions; // e.g. ["APPROVE", "REJECT"]
     private String actionTaken; // e.g. "APPROVE"
     private String subProcessInstanceId; // For Call Activity
+    private String parentCaseId; // To group child cases under parent
+    private String parentWorkflowCode;
+    private String parentWorkflowName;
 }
