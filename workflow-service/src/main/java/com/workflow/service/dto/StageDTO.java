@@ -17,4 +17,5 @@ public class StageDTO {
     private LocalDateTime dueDate; // For SLA
     private String allowedActions; // e.g. ["APPROVE", "REJECT"]
     private String actionTaken; // e.g. "APPROVE"
+    private String subProcessInstanceId; // For Call Activity
 }

@@ -13,6 +13,7 @@ import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.Task;
 import org.flowable.task.api.history.HistoricTaskInstance;
+import org.flowable.engine.history.HistoricActivityInstance;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -108,6 +109,21 @@ public class CaseService {
             stages.add(mapToStageDTO(task, "ACTIVE"));
         }
 
+        // 3. Call Activities (Sub-processes) - Historic
+        // We need both active and completed access via HistoryService for activities
+        List<HistoricActivityInstance> callActivities = historyService.createHistoricActivityInstanceQuery()
+                .processInstanceId(caseId)
+                .activityType("callActivity")
+                .orderByHistoricActivityInstanceStartTime().asc()
+                .list();
+
+        for (HistoricActivityInstance activity : callActivities) {
+            stages.add(mapToStageDTO(activity));
+        }
+
+        // Sort all by created time
+        stages.sort(Comparator.comparing(StageDTO::getCreatedTime, Comparator.nullsLast(Comparator.naturalOrder())));
+
         return stages;
     }
 
@@ -188,6 +204,13 @@ public class CaseService {
         dto.setStatus("ACTIVE");
         dto.setStartTime(LocalDateTime.ofInstant(process.getStartTime().toInstant(), ZoneId.systemDefault()));
         dto.setStartUserId(process.getStartUserId());
+        // Fetch parent via query since direct getter is missing on runtime interface
+        ProcessInstance parent = runtimeService.createProcessInstanceQuery()
+                .subProcessInstanceId(process.getId())
+                .singleResult();
+        if (parent != null) {
+            dto.setParentCaseId(parent.getId());
+        }
 
         // Enrich Name if null
         if (dto.getWorkflowName() == null) {
@@ -209,6 +232,7 @@ public class CaseService {
             dto.setEndTime(LocalDateTime.ofInstant(process.getEndTime().toInstant(), ZoneId.systemDefault()));
         }
         dto.setStartUserId(process.getStartUserId());
+        dto.setParentCaseId(process.getSuperProcessInstanceId());
 
         // Enrich Name
         if (dto.getWorkflowName() == null) {
@@ -241,6 +265,30 @@ public class CaseService {
                 task.getCreateTime(), task.getDueDate(), task.getId(), task.getProcessDefinitionId(),
                 task.getProcessInstanceId());
         dto.setStatus(status);
+        return dto;
+    }
+
+    private StageDTO mapToStageDTO(HistoricActivityInstance activity) {
+        StageDTO dto = new StageDTO();
+        dto.setStageName(activity.getActivityName());
+        dto.setStageCode(activity.getActivityId()); // ID in BPMN
+        dto.setCaseId(activity.getProcessInstanceId());
+
+        // Status mapping
+        if (activity.getEndTime() != null) {
+            dto.setStatus("COMPLETED");
+            dto.setEndTime(LocalDateTime.ofInstant(activity.getEndTime().toInstant(), ZoneId.systemDefault()));
+        } else {
+            dto.setStatus("ACTIVE");
+        }
+
+        if (activity.getStartTime() != null) {
+            dto.setCreatedTime(LocalDateTime.ofInstant(activity.getStartTime().toInstant(), ZoneId.systemDefault()));
+        }
+
+        // Populate Child Case ID
+        dto.setSubProcessInstanceId(activity.getCalledProcessInstanceId());
+
         return dto;
     }
 

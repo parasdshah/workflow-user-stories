@@ -5,14 +5,13 @@ function Run-Build($path, $command, $argsList) {
     Write-Host "Building in $path..."
     Push-Location $path
     try {
-        Start-Process -FilePath $command -ArgumentList $argsList -Wait -NoNewWindow -PassThru | ForEach-Object {
-            if ($_.ExitCode -ne 0) {
-                Write-Error "Build failed in $path with exit code $($_.ExitCode)"
-                exit 1
-            }
+        # Use cmd /c to execute batch files reliably and capture exit code
+        $p = Start-Process -FilePath "cmd.exe" -ArgumentList "/c $command $argsList" -Wait -NoNewWindow -PassThru
+        if ($p.ExitCode -ne 0) {
+            Write-Error "Build failed in $path with exit code $($p.ExitCode)"
+            exit 1
         }
-    }
-    finally {
+    } finally {
         Pop-Location
     }
 }
@@ -32,25 +31,17 @@ Push-Location workflow-ui
 try {
     # Install
     Write-Host "Running npm install..."
-    Start-Process -FilePath "npm.cmd" -ArgumentList "install" -Wait -NoNewWindow -PassThru | ForEach-Object {
-        if ($_.ExitCode -ne 0) {
-            throw "npm install failed"
-        }
-    }
+    $p1 = Start-Process -FilePath "cmd.exe" -ArgumentList "/c npm install" -Wait -NoNewWindow -PassThru
+    if ($p1.ExitCode -ne 0) { throw "npm install failed" }
     
     # Build
     Write-Host "Running npm run build..."
-    Start-Process -FilePath "npm.cmd" -ArgumentList "run build" -Wait -NoNewWindow -PassThru | ForEach-Object {
-        if ($_.ExitCode -ne 0) {
-            throw "npm run build failed"
-        }
-    }
-}
-catch {
+    $p2 = Start-Process -FilePath "cmd.exe" -ArgumentList "/c npm run build" -Wait -NoNewWindow -PassThru
+    if ($p2.ExitCode -ne 0) { throw "npm run build failed" }
+} catch {
     Write-Error "Frontend build failed: $_"
     exit 1
-}
-finally {
+} finally {
     Pop-Location
 }
 

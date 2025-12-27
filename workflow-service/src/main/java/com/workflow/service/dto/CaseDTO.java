@@ -12,4 +12,5 @@ public class CaseDTO {
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private String startUserId;
+    private String parentCaseId;
 }
