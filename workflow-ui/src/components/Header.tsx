@@ -1,6 +1,6 @@
 import { Group, Button, Title, Container, Paper } from '@mantine/core';
 import { useNavigate } from 'react-router-dom';
-import { IconList, IconHistory, IconInbox } from '@tabler/icons-react';
+import { IconList, IconHistory, IconInbox, IconFileAnalytics } from '@tabler/icons-react';
 import ServiceHealth from './ServiceHealth';
 
 function Header() {
@@ -25,6 +25,9 @@ function Header() {
                         </Button>
                         <Button variant="subtle" leftSection={<IconList size={16} />} onClick={() => navigate('/screens')}>
                             Screens
+                        </Button>
+                        <Button variant="subtle" leftSection={<IconFileAnalytics size={16} />} onClick={() => navigate('/audit')}>
+                            Audit Log
                         </Button>
                     </Group>
                 </Group>

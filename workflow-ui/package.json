@@ -12,6 +12,7 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@mantine/core": "^8.3.10",
+    "@mantine/dates": "^8.3.10",
     "@mantine/form": "^8.3.10",
     "@mantine/hooks": "^8.3.10",
     "@mantine/notifications": "^8.3.10",

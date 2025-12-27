@@ -1,0 +1,65 @@
+package com.workflow.service.controller;
+
+import com.workflow.service.entity.AuditTrail;
+import com.workflow.service.repository.AuditTrailRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.web.bind.annotation.*;
+
+import jakarta.persistence.criteria.Predicate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/audit-logs")
+public class AuditLogController {
+
+    @Autowired
+    private AuditTrailRepository auditTrailRepository;
+
+    @GetMapping
+    public Page<AuditTrail> getAuditLogs(
+            @RequestParam(required = false) String entityName,
+            @RequestParam(required = false) String action,
+            @RequestParam(required = false) String changedBy,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "changedAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String direction) {
+
+        Sort sort = direction.equalsIgnoreCase("asc") ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Specification<AuditTrail> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (entityName != null && !entityName.isEmpty()) {
+                predicates.add(cb.equal(root.get("entityName"), entityName));
+            }
+            if (action != null && !action.isEmpty()) {
+                predicates.add(cb.equal(root.get("action"), action));
+            }
+            if (changedBy != null && !changedBy.isEmpty()) {
+                predicates.add(cb.like(cb.lower(root.get("changedBy")), "%" + changedBy.toLowerCase() + "%"));
+            }
+            if (startDate != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("changedAt"), startDate));
+            }
+            if (endDate != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("changedAt"), endDate));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        return auditTrailRepository.findAll(spec, pageable);
+    }
+}

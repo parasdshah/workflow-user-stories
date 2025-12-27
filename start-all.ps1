@@ -1,3 +1,10 @@
+# Stop services if script exists
+if (Test-Path ".\stop-all.ps1") {
+    Write-Host "Stopping running services..."
+    .\stop-all.ps1
+}
+
+
 # Start Service Registry
 Write-Host "Starting Service Registry..."
 Start-Process -FilePath "mvn" -ArgumentList "spring-boot:run -f service-registry/pom.xml" -NoNewWindow

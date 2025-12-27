@@ -8,6 +8,7 @@ import DiagramPreview from './pages/DiagramPreview';
 import { ScreenDefinitionList } from './components/screens/ScreenDefinitionList';
 import { ScreenDefinitionEditor } from './components/screens/ScreenDefinitionEditor';
 import CaseView from './pages/CaseView';
+import AuditLog from './pages/AuditLog';
 
 import Header from './components/Header';
 
@@ -26,6 +27,7 @@ function App() {
           <Route path="/screens" element={<ScreenDefinitionList />} />
           <Route path="/screens/:code" element={<ScreenDefinitionEditor />} />
           <Route path="/cases/:id" element={<CaseView />} />
+          <Route path="/audit" element={<AuditLog />} />
         </Routes>
       </BrowserRouter>
     </MantineProvider>
