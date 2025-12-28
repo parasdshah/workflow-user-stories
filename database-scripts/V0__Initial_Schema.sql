@@ -34,7 +34,10 @@ CREATE TABLE IF NOT EXISTS stage_config (
     reminder_template_id1 VARCHAR(255),
     reminder_template_id2 VARCHAR(255),
     sla_duration_days DECIMAL(19, 2),
-    allowed_actions TEXT
+    allowed_actions TEXT,
+    parallel_grouping VARCHAR(255),
+    is_rule_stage BOOLEAN DEFAULT FALSE,
+    rule_key VARCHAR(255)
 );
 
 -- 3. Screen Definition
