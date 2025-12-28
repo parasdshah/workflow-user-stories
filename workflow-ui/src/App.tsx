@@ -9,6 +9,7 @@ import { ScreenDefinitionList } from './components/screens/ScreenDefinitionList'
 import { ScreenDefinitionEditor } from './components/screens/ScreenDefinitionEditor';
 import CaseView from './pages/CaseView';
 import AuditLog from './pages/AuditLog';
+import RuleManagement from './pages/RuleManagement';
 
 import Header from './components/Header';
 
@@ -28,6 +29,7 @@ function App() {
           <Route path="/screens/:code" element={<ScreenDefinitionEditor />} />
           <Route path="/cases/:id" element={<CaseView />} />
           <Route path="/audit" element={<AuditLog />} />
+          <Route path="/rules" element={<RuleManagement />} />
         </Routes>
       </BrowserRouter>
     </MantineProvider>

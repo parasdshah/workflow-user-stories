@@ -29,6 +29,9 @@ function Header() {
                         <Button variant="subtle" leftSection={<IconFileAnalytics size={16} />} onClick={() => navigate('/audit')}>
                             Audit Log
                         </Button>
+                        <Button variant="subtle" leftSection={<IconList size={16} />} onClick={() => navigate('/rules')}>
+                            Rules
+                        </Button>
                     </Group>
                 </Group>
 

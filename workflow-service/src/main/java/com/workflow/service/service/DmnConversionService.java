@@ -50,7 +50,8 @@ public class DmnConversionService {
             // Build XML
             StringBuilder xml = new StringBuilder();
             xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-            xml.append("<definitions xmlns=\"http://www.omg.org/spec/DMN/20151101/dmn.xsd\" ");
+            xml.append("<definitions xmlns=\"http://www.omg.org/spec/DMN/20180521/MODEL/\" ");
+            xml.append("xmlns:flowable=\"http://flowable.org/dmn\" ");
             xml.append("id=\"definition_").append(definitionKey).append("\" ");
             xml.append("name=\"").append(decisionName).append("\" ");
             xml.append("namespace=\"http://www.flowable.org/dmn\">\n");
