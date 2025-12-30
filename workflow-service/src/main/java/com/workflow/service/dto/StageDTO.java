@@ -12,8 +12,14 @@ public class StageDTO {
     private String caseId; // Process Instance ID
     private String status; // ACTIVE, COMPLETED
     private String assignee;
+    
+    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdTime;
+    
+    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime endTime;
+    
+    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime dueDate; // For SLA
     private String allowedActions; // e.g. ["APPROVE", "REJECT"]
     private String actionTaken; // e.g. "APPROVE"
@@ -21,4 +27,6 @@ public class StageDTO {
     private String parentCaseId; // To group child cases under parent
     private String parentWorkflowCode;
     private String parentWorkflowName;
+    
+    private java.util.Map<String, Object> processVariables;
 }

@@ -32,6 +32,9 @@ function Header() {
                         <Button variant="subtle" leftSection={<IconList size={16} />} onClick={() => navigate('/rules')}>
                             Rules
                         </Button>
+                        <Button variant="subtle" leftSection={<IconList size={16} />} onClick={() => navigate('/modules')}>
+                            Modules
+                        </Button>
                     </Group>
                 </Group>
 

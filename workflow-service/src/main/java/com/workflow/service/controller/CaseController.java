@@ -19,6 +19,11 @@ public class CaseController {
 
     private final CaseService caseService;
 
+    @GetMapping
+    public ResponseEntity<List<CaseDTO>> getAllActiveCases() {
+        return ResponseEntity.ok(caseService.getAllActiveCases());
+    }
+
     @PostMapping
     public ResponseEntity<String> initiateCase(@RequestBody InitiateCaseRequest request) {
         String workflowCode = request.getWorkflowCode();

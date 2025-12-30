@@ -103,20 +103,60 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
                         color={getColor(stage.status)}
                         title={stage.stageName}
                     >
+                        {(() => {
+                            if (!stage.actionTaken || !stage.allowedActions) return null;
+                            try {
+                                const actions = JSON.parse(stage.allowedActions);
+                                const action = Array.isArray(actions) ? actions.find((a: any) =>
+                                    (typeof a === 'string' ? a : (a.value || a.actionLabel)) === stage.actionTaken
+                                ) : null;
+                                const postStatus = action && typeof action !== 'string' ? action.postStatus : null;
+
+                                if (postStatus) {
+                                    return (
+                                        <Text size="xs" mt={2} fw={500} c="dimmed">
+                                            Status: {postStatus}
+                                        </Text>
+                                    );
+                                }
+                            } catch (e) { }
+                            return null;
+                        })()}
+
                         <Text c="dimmed" size="sm">
                             Assignee: {stage.assignee || 'Unassigned'}
                         </Text>
                         <Text size="xs" mt={4}>
                             Created: {stage.createdTime ? new Date(stage.createdTime).toLocaleString() : '-'}
+
                         </Text>
                         {stage.endTime && (
                             <Text size="xs" mt={4}>
                                 Completed: {new Date(stage.endTime).toLocaleString()}
                             </Text>
                         )}
+
                         {stage.status === 'COMPLETED' && stage.actionTaken && (
                             <Badge
-                                color={stage.actionTaken === 'REJECT' ? 'red' : 'green'}
+                                color={(() => {
+                                    if (!stage.allowedActions) return stage.actionTaken === 'REJECT' ? 'red' : 'green';
+                                    try {
+                                        const actions = JSON.parse(stage.allowedActions);
+                                        const action = Array.isArray(actions) ? actions.find((a: any) =>
+                                            (typeof a === 'string' ? a : (a.value || a.actionLabel)) === stage.actionTaken
+                                        ) : null;
+
+                                        if (action) {
+                                            const style = typeof action === 'string' ? (action === 'REJECT' ? 'red' : 'blue') : (action.buttonStyle || action.style || 'default');
+                                            if (style === 'danger' || style === 'red') return 'red';
+                                            if (style === 'success' || style === 'green') return 'green';
+                                            if (style === 'warning' || style === 'orange') return 'orange';
+                                            if (style === 'default' || style === 'gray') return 'gray';
+                                            return 'blue';
+                                        }
+                                    } catch (e) { }
+                                    return stage.actionTaken === 'REJECT' ? 'red' : 'green';
+                                })()}
                                 size="sm"
                                 mt={4}
                                 leftSection={stage.actionTaken === 'REJECT' ? <IconX size={12} /> : <IconCheck size={12} />}
@@ -129,19 +169,51 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
                                 <Badge color="blue" size="xs">In Progress</Badge>
                                 {stage.taskId && onAction && (
                                     <>
-                                        {stage.allowedActions ? (
-                                            stage.allowedActions.replace(/[\[\]"]/g, '').split(',').map(action => (
-                                                <Button
-                                                    key={action.trim()}
-                                                    size="xs"
-                                                    variant="outline"
-                                                    color={action.trim() === 'REJECT' ? 'red' : 'blue'}
-                                                    onClick={() => onAction(stage.taskId!, action.trim())}
-                                                >
-                                                    {action.trim()}
-                                                </Button>
-                                            ))
-                                        ) : (
+                                        {stage.allowedActions ? (() => {
+                                            try {
+                                                const parsed = JSON.parse(stage.allowedActions);
+                                                // Handle Array of Strings (Legacy) or Array of Objects (New)
+                                                const actions = Array.isArray(parsed) ? parsed : [];
+
+                                                return actions.map((action: any, idx: number) => {
+                                                    const label = typeof action === 'string' ? action : action.label || action.actionLabel;
+                                                    const value = typeof action === 'string' ? action : action.value || action.actionLabel;
+
+                                                    // Map style configuration to Mantine colors
+                                                    const actionStyle = typeof action === 'string' ? (action === 'REJECT' ? 'red' : 'blue') : (action.buttonStyle || action.style || 'default');
+                                                    let color = 'blue';
+                                                    if (actionStyle === 'danger' || actionStyle === 'red') color = 'red';
+                                                    else if (actionStyle === 'success' || actionStyle === 'green') color = 'green';
+                                                    else if (actionStyle === 'warning' || actionStyle === 'orange') color = 'orange';
+                                                    else if (actionStyle === 'default' || actionStyle === 'gray') color = 'gray';
+
+                                                    return (
+                                                        <Button
+                                                            key={`${idx}-${label}`}
+                                                            size="xs"
+                                                            variant={actionStyle === 'default' ? 'default' : 'outline'}
+                                                            color={actionStyle === 'default' ? undefined : color}
+                                                            onClick={() => onAction(stage.taskId!, value)}
+                                                        >
+                                                            {label}
+                                                        </Button>
+                                                    );
+                                                });
+                                            } catch (e) {
+                                                // Fallback for simple comma-separated string if JSON parse fails
+                                                return stage.allowedActions.replace(/[\[\]"]/g, '').split(',').map(action => (
+                                                    <Button
+                                                        key={action.trim()}
+                                                        size="xs"
+                                                        variant="outline"
+                                                        color={action.trim() === 'REJECT' ? 'red' : 'blue'}
+                                                        onClick={() => onAction(stage.taskId!, action.trim())}
+                                                    >
+                                                        {action.trim()}
+                                                    </Button>
+                                                ));
+                                            }
+                                        })() : (
                                             <Button size="xs" variant="outline" onClick={() => onAction(stage.taskId!)}>
                                                 Complete
                                             </Button>

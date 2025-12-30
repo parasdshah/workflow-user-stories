@@ -15,12 +15,18 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.util.List;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import java.util.Map;
+import java.util.Collections;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class BpmnGeneratorService {
 
     private final ScreenMappingRepository screenMappingRepository;
+    private final ObjectMapper objectMapper;
 
     public String generateBpmnXml(WorkflowMaster workflow, List<StageConfig> stages) {
         BpmnModel model = new BpmnModel();
@@ -53,13 +59,88 @@ public class BpmnGeneratorService {
                 FlowElement stageElement = createStageElement(process, stage, workflow);
                 process.addFlowElement(stageElement);
 
-                connect(process, previousElement, stageElement);
+                // 1. Entry Condition (Skip Logic)
+                FlowElement exitPoint = stageElement;
 
-                // Handle SLA (Timer -> Notification -> End)
-                // Note: For parallel, SLA is tricky. We'll attach to the individual task.
+                if (stage.getEntryCondition() != null && !stage.getEntryCondition().isBlank()) {
+                    ExclusiveGateway split = new ExclusiveGateway();
+                    split.setId("entry_split_" + stage.getStageCode());
+                    process.addFlowElement(split);
+
+                    ExclusiveGateway join = new ExclusiveGateway();
+                    join.setId("entry_join_" + stage.getStageCode());
+                    process.addFlowElement(join);
+
+                    // Connect Previous -> Split
+                    connect(process, previousElement, split);
+
+                    // Split -> Stage (Condition Met)
+                    SequenceFlow enterFlow = connect(process, split, stageElement);
+                    enterFlow.setConditionExpression(stage.getEntryCondition());
+
+                    // Split -> Join (Skip)
+                    SequenceFlow skipFlow = connect(process, split, join);
+                    // This skip flow acts as the path if condition is false.
+                    // To be explicit, we could rely on default flow behavior or inverse condition.
+                    // For now, Flowable handles standard condition eval. If one has condition and
+                    // other doesn't,
+                    // the one without condition acts as default/fallback usually.
+                    split.setDefaultFlow(skipFlow.getId());
+
+                    // Stage -> Join
+                    connect(process, stageElement, join);
+
+                    exitPoint = join;
+                } else {
+                    // Standard Connect
+                    connect(process, previousElement, stageElement);
+                }
+
+                // Handle SLA
                 addSlaIfConfigured(process, stageElement, stage, workflow);
 
-                previousElement = stageElement;
+                // 2. Action Routing (Post-Stage Branching)
+                if (stage.getActions() != null && !stage.getActions().isEmpty()) {
+                    // Check if any action needs routing
+                    boolean hasRouting = stage.getActions().stream()
+                            .anyMatch(a -> "SPECIFIC".equals(a.getTargetType()) || "END".equals(a.getTargetType()));
+
+                    if (hasRouting) {
+                        ExclusiveGateway actionSplit = new ExclusiveGateway();
+                        actionSplit.setId("action_split_" + stage.getStageCode());
+                        process.addFlowElement(actionSplit);
+
+                        connect(process, exitPoint, actionSplit);
+                        
+                        // Create flows for routed actions
+                        for (com.workflow.service.entity.StageAction action : stage.getActions()) {
+                            String targetType = action.getTargetType();
+                            String label = action.getActionLabel(); 
+                            
+                            if ("SPECIFIC".equals(targetType)) {
+                                String targetStageCode = action.getTargetStage();
+                                if(targetStageCode != null) {
+                                    SequenceFlow flow = new SequenceFlow();
+                                    flow.setSourceRef(actionSplit.getId());
+                                    flow.setTargetRef(targetStageCode);
+                                    flow.setConditionExpression("${outcome == '" + label + "'}");
+                                    process.addFlowElement(flow);
+                                }
+                            } else if ("END".equals(targetType)) {
+                                EndEvent end = new EndEvent();
+                                end.setId("end_" + stage.getStageCode() + "_" + label);
+                                process.addFlowElement(end);
+
+                                SequenceFlow flow = connect(process, actionSplit, end);
+                                flow.setConditionExpression("${outcome == '" + label + "'}");
+                            }
+                        }
+                        
+                        exitPoint = actionSplit;
+                    }
+                }
+
+                previousElement = exitPoint;
             } else {
                 // Parallel Block
                 ParallelGateway split = new ParallelGateway();
@@ -173,11 +254,12 @@ public class BpmnGeneratorService {
         }
     }
 
-    private void connect(Process process, FlowElement source, FlowElement target) {
+    private SequenceFlow connect(Process process, FlowElement source, FlowElement target) {
         SequenceFlow flow = new SequenceFlow();
         flow.setSourceRef(source.getId());
         flow.setTargetRef(target.getId());
         process.addFlowElement(flow);
+        return flow;
     }
 
     private void addSlaIfConfigured(Process process, FlowElement stageElement, StageConfig stage,

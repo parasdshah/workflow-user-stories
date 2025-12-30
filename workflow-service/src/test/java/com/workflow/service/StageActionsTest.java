@@ -49,7 +49,18 @@ public class StageActionsTest {
                 stage1.setStageName("Initial Review");
                 stage1.setSequenceOrder(1);
                 stage1.setNestedWorkflow(false);
-                stage1.setAllowedActions("[\"APPROVE\",\"REJECT\"]");
+                com.workflow.service.entity.StageAction a1 = new com.workflow.service.entity.StageAction();
+                a1.setActionLabel("APPROVE");
+                a1.setTargetType("NEXT");
+                a1.setStageConfig(stage1);
+                
+                com.workflow.service.entity.StageAction a2 = new com.workflow.service.entity.StageAction();
+                a2.setActionLabel("REJECT");
+                a2.setTargetType("NEXT");
+                a2.setStageConfig(stage1);
+                
+                stage1.getActions().add(a1);
+                stage1.getActions().add(a2);
                 workflowService.saveStage(stage1, "test-user");
 
                 // 3. Generate & Deploy

@@ -1,19 +1,21 @@
 
-import { Container, Title, Accordion, Badge, Group, Text, Loader, Button, Tabs } from '@mantine/core';
-import { IconCheck, IconX } from '@tabler/icons-react';
-import { useState, useEffect } from 'react';
+import { Container, Title, Accordion, Badge, Group, Text, Loader, Button, Tabs, ActionIcon, Modal, Code, Tooltip } from '@mantine/core';
+import { IconCheck, IconX, IconCode } from '@tabler/icons-react';
+import React, { useState, useEffect } from 'react';
+import { useDisclosure } from '@mantine/hooks';
 
 interface CaseDto {
-    id: string;
+    caseId: string;
     workflowCode: string;
     startTime: string;
+    processVariables?: any;
 }
 
 interface TaskDto {
-    id: string;
-    name: string;
+    taskId: string;
+    stageName: string;
     assignee: string;
-    created: string;
+    createdTime: string;
 }
 
 // Reuse or new interface for History Items
@@ -30,7 +32,9 @@ interface HistoricStageDto {
     actionTaken?: string;
     parentCaseId?: string;
     parentWorkflowCode?: string;
+
     parentWorkflowName?: string;
+    processVariables?: any;
 }
 
 function TaskInbox() {
@@ -43,12 +47,35 @@ function TaskInbox() {
     const [history, setHistory] = useState<HistoricStageDto[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
 
+    // Variables Modal
+    const [opened, { open, close }] = useDisclosure(false);
+    const [selectedVariables, setSelectedVariables] = useState<string>('{}');
+
+    const handleViewVariables = (e: React.MouseEvent, variables: any) => {
+        e.stopPropagation(); // Prevent Accordion toggle
+        setSelectedVariables(JSON.stringify(variables || {}, null, 2));
+        open();
+    };
+
     useEffect(() => {
         if (activeTab === 'active') {
             fetch('/api/runtime/cases')
-                .then(res => res.json())
-                .then(data => setCases(data))
-                .catch(err => console.error("Error fetching cases:", err));
+                .then(res => {
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    return res.json();
+                })
+                .then(data => {
+                    if (Array.isArray(data)) {
+                        setCases(data);
+                    } else {
+                        console.error("API returned non-array for cases:", data);
+                        setCases([]);
+                    }
+                })
+                .catch(err => {
+                    console.error("Error fetching cases:", err);
+                    setCases([]);
+                });
         } else if (activeTab === 'history') {
             setLoadingHistory(true);
             // TODO: Get real userId. For now "user"
@@ -91,7 +118,6 @@ function TaskInbox() {
     };
 
     // Group history by Case for better view
-    // Group history by Case for better view
     const groupedHistory = Array.isArray(history) ? history.reduce((acc, stage) => {
         const groupKey = stage.parentCaseId || stage.caseId; // Group by Parent ID if exists to show Overall context
 
@@ -119,26 +145,31 @@ function TaskInbox() {
                     ) : (
                         <Accordion onChange={handleAccordionChange}>
                             {cases.map((c) => (
-                                <Accordion.Item key={c.id} value={c.id}>
+                                <Accordion.Item key={c.caseId} value={c.caseId}>
                                     <Accordion.Control>
                                         <Group justify="space-between" pr="md">
-                                            <Text fw={500}>{c.workflowCode} (ID: {c.id})</Text>
+                                            <Text fw={500}>{c.workflowCode} (ID: {c.caseId})</Text>
                                             <Group>
                                                 <Text size="sm" c="dimmed">Started: {new Date(c.startTime).toLocaleString()}</Text>
                                                 <Badge color="green">Active</Badge>
-                                                <Button size="xs" variant="light" component="a" href={`/cases/${c.id}`}>View Case</Button>
+                                                <Tooltip label="View Variables">
+                                                    <ActionIcon variant="light" color="blue" onClick={(e) => handleViewVariables(e, c.processVariables)}>
+                                                        <IconCode size={18} />
+                                                    </ActionIcon>
+                                                </Tooltip>
+                                                <Button size="xs" variant="light" component="a" href={`/cases/${c.caseId}`}>View Case</Button>
                                             </Group>
                                         </Group>
                                     </Accordion.Control>
                                     <Accordion.Panel>
                                         <Title order={5} mb="sm">Current Stages (Tasks)</Title>
-                                        {loadingTasks[c.id] && <Loader size="sm" />}
-                                        {!loadingTasks[c.id] && tasks[c.id]?.length === 0 && <Text size="sm">No active tasks (or case ended).</Text>}
-                                        {!loadingTasks[c.id] && tasks[c.id]?.map(t => (
-                                            <Group key={t.id} mb="xs" p="xs" style={{ border: '1px solid #eee', borderRadius: '4px' }}>
-                                                <Text size="sm" fw={500}>{t.name}</Text>
+                                        {loadingTasks[c.caseId] && <Loader size="sm" />}
+                                        {!loadingTasks[c.caseId] && tasks[c.caseId]?.length === 0 && <Text size="sm">No active tasks (or case ended).</Text>}
+                                        {!loadingTasks[c.caseId] && tasks[c.caseId]?.map(t => (
+                                            <Group key={t.taskId} mb="xs" p="xs" style={{ border: '1px solid #eee', borderRadius: '4px' }}>
+                                                <Text size="sm" fw={500}>{t.stageName}</Text>
                                                 <Badge variant="outline" size="sm">{t.assignee || 'Unassigned'}</Badge>
-                                                <Text size="xs" c="dimmed">Created: {new Date(t.created).toLocaleString()}</Text>
+                                                <Text size="xs" c="dimmed">Created: {new Date(t.createdTime).toLocaleString()}</Text>
                                             </Group>
                                         ))}
                                     </Accordion.Panel>
@@ -170,6 +201,11 @@ function TaskInbox() {
                                                 </div>
                                                 <Group>
                                                     <Badge color="gray">Ended/History</Badge>
+                                                    <Tooltip label="View Variables">
+                                                        <ActionIcon variant="light" color="blue" onClick={(e) => handleViewVariables(e, firstTask.processVariables)}>
+                                                            <IconCode size={18} />
+                                                        </ActionIcon>
+                                                    </Tooltip>
                                                     <Button size="xs" variant="light" component="a" href={`/cases/${caseId}`}>View Case</Button>
                                                 </Group>
                                             </Group>
@@ -200,8 +236,49 @@ function TaskInbox() {
                     )}
                 </Tabs.Panel>
             </Tabs>
+
+            <Modal opened={opened} onClose={close} title="Process Variables" size="lg">
+                <Code block>{selectedVariables}</Code>
+            </Modal>
         </Container>
     );
 }
 
-export default TaskInbox;
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, error: any }> {
+    constructor(props: any) {
+        super(props);
+        this.state = { hasError: false, error: null };
+    }
+
+    static getDerivedStateFromError(error: any) {
+        return { hasError: true, error };
+    }
+
+    componentDidCatch(error: any, errorInfo: any) {
+        console.error("TaskInbox Error:", error, errorInfo);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <Container py="xl">
+                    <Title c="red">Something went wrong in Task Inbox</Title>
+                    <Code block mt="md" color="red">
+                        {this.state.error?.toString()}
+                    </Code>
+                    <Button mt="md" onClick={() => window.location.reload()}>Reload Page</Button>
+                </Container>
+            );
+        }
+
+        return this.props.children;
+    }
+}
+
+export default function TaskInboxWithBoundary() {
+    return (
+        <ErrorBoundary>
+            <TaskInbox />
+        </ErrorBoundary>
+    );
+}

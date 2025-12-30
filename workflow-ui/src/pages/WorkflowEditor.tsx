@@ -1,5 +1,5 @@
-import { Container, Title, Button, TextInput, Group, Stack, Paper, Select, NumberInput, Modal, Table, Checkbox, ActionIcon, SimpleGrid, Tabs, SegmentedControl, Text } from '@mantine/core';
-import { IconEdit, IconTrash, IconGitBranch } from '@tabler/icons-react';
+import { Container, Title, Button, TextInput, Group, Stack, Paper, Select, NumberInput, Modal, Table, ActionIcon, SimpleGrid, Tabs, SegmentedControl, Text } from '@mantine/core';
+import { IconEdit, IconTrash, IconGitBranch, IconUser, IconSettings, IconGavel } from '@tabler/icons-react';
 import { useForm } from '@mantine/form';
 import { useDisclosure } from '@mantine/hooks';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -7,30 +7,37 @@ import { useState, useEffect } from 'react';
 import { BpmnVisualizer } from '../components/bpmn/BpmnVisualizer';
 
 // Define types locally or import from a shared types file
+interface StageAction {
+    id?: number;
+    actionLabel: string;
+    buttonStyle: string;
+    targetType: string;
+    targetStage?: string;
+    postActionStatus?: string;
+}
+
 interface StageConfig {
     stageName: string;
     stageCode: string;
     sequenceOrder: number;
     isNestedWorkflow?: boolean;
     nestedWorkflowCode?: string;
-    // UI only fields for mapping
     screenCode?: string;
     accessType?: string;
-    // Hooks
     preEntryHook?: string;
-    postEntryHook?: string; // New
-    preExitHook?: string;   // New
+    postEntryHook?: string;
+    preExitHook?: string;
     postExitHook?: string;
-    allowedActions?: string; // e.g. "APPROVE,REJECT"
-    parallelGrouping?: string; // New
-    isRuleStage?: boolean; // New
-    ruleKey?: string; // New
+    actions?: StageAction[]; // Refactored
+    parallelGrouping?: string;
+    isRuleStage?: boolean;
+    ruleKey?: string;
+    entryCondition?: string;
+    // Legacy support for display if needed, but we prefer 'actions'
+    allowedActions?: string;
 }
 
-interface ScreenDefinition {
-    screenCode: string;
-    description: string;
-}
+
 
 function WorkflowEditor() {
     const { code } = useParams();
@@ -38,7 +45,18 @@ function WorkflowEditor() {
     const [opened, { open, close }] = useDisclosure(false);
     const [stages, setStages] = useState<StageConfig[]>([]);
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
-    const [screens, setScreens] = useState<ScreenDefinition[]>([]);
+    const [modules, setModules] = useState<string[]>([]);
+
+    useEffect(() => {
+        fetch('/api/modules')
+            .then(res => res.json())
+            .then((data: any[]) => setModules(data.map(m => m.moduleName)))
+            .catch(err => {
+                console.error("Failed to load modules", err);
+                // Fallback
+                setModules(['Overall', 'Credit Initiation', 'Financial Spreading', 'Credit Rating', 'Credit Approval', 'Sales', 'HR', 'Finance']);
+            });
+    }, []);
 
     const form = useForm({
         initialValues: {
@@ -57,36 +75,21 @@ function WorkflowEditor() {
             sequenceOrder: 1,
             isNestedWorkflow: false,
             nestedWorkflowCode: '',
-            screenCode: '',
-            accessType: 'EDITABLE',
+            // screenCode: '', // Removed
+            // accessType: 'EDITABLE', // Removed
             preEntryHook: '',
             postEntryHook: '',
             preExitHook: '',
             postExitHook: '',
-            allowedActions: '',
+            actions: [] as StageAction[],
             parallelGrouping: '',
             isRuleStage: false,
-            ruleKey: ''
+            ruleKey: '',
+            entryCondition: ''
         }
     });
 
-    useEffect(() => {
-        // Fetch available screens
-        fetch('/api/screens')
-            .then(res => {
-                if (!res.ok) throw new Error("Failed to fetch screens");
-                return res.json();
-            })
-            .then(data => {
-                if (Array.isArray(data)) {
-                    setScreens(data);
-                } else {
-                    console.error("Expected array of screens but got:", data);
-                    setScreens([]);
-                }
-            })
-            .catch(err => console.error("Failed to load screens", err));
-    }, []);
+    // Validations or effects can go here
 
     const handleStageSubmit = (values: typeof stageForm.values) => {
         if (editingIndex !== null) {
@@ -106,6 +109,9 @@ function WorkflowEditor() {
     const openAddModal = () => {
         setEditingIndex(null);
         stageForm.reset();
+        // Auto-increment sequence order
+        const maxSeq = stages.length > 0 ? Math.max(...stages.map(s => s.sequenceOrder)) : 0;
+        stageForm.setFieldValue('sequenceOrder', maxSeq + 1);
         open();
     };
 
@@ -114,41 +120,18 @@ function WorkflowEditor() {
         const stage = stages[index];
         stageForm.setValues({
             ...stage,
-            screenCode: stage.screenCode || '',
-            accessType: stage.accessType || 'EDITABLE',
+            // screenCode: stage.screenCode || '',
+            // accessType: stage.accessType || 'EDITABLE',
             preEntryHook: stage.preEntryHook || '',
             postEntryHook: stage.postEntryHook || '',
             preExitHook: stage.preExitHook || '',
             postExitHook: stage.postExitHook || '',
-            allowedActions: stage.allowedActions || '',
+            actions: stage.actions || [],
             parallelGrouping: stage.parallelGrouping || '',
             isRuleStage: stage.isRuleStage || false,
-            ruleKey: stage.ruleKey || ''
+            ruleKey: stage.ruleKey || '',
+            entryCondition: stage.entryCondition || ''
         });
-
-        // Fetch existing mapping if we don't have it locally (e.g. page reload)
-        // But for now, we rely on what's in 'stages' state.
-        // If 'stages' came from API, it lacks 'screenCode'. We might need to fetch it.
-        // Optimization: Lazy fetch mapping when opening modal if missing.
-        if (code && !stage.screenCode) {
-            fetch(`/api/stages/${stage.stageCode}/mapping`)
-                .then(res => {
-                    if (res.status === 204) return null; // No content
-                    return res.json();
-                })
-                .then(mapping => {
-                    if (mapping) {
-                        stageForm.setFieldValue('screenCode', mapping.screenCode);
-                        stageForm.setFieldValue('accessType', mapping.accessType);
-                        // Update local state too so we don't fetch again
-                        const updated = [...stages];
-                        updated[index] = { ...stage, screenCode: mapping.screenCode, accessType: mapping.accessType };
-                        setStages(updated);
-                    }
-                })
-                .catch(err => console.error("Error fetching mapping", err));
-        }
-
         open();
     };
 
@@ -243,23 +226,7 @@ function WorkflowEditor() {
                     continue;
                 }
 
-                // 3. Save Mapping (if screenCode is set)
-                if (stage.screenCode) {
-                    console.log("Saving Mapping for stage:", stage.stageCode);
-                    const mappingRes = await fetch(`/api/stages/${stage.stageCode}/mapping`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            stageCode: stage.stageCode,
-                            screenCode: stage.screenCode,
-                            accessType: stage.accessType || 'EDITABLE'
-                        })
-                    });
-                    if (!mappingRes.ok) {
-                        console.error("Mapping Save Failed");
-                        // alert(`Failed to save mapping for ${stage.stageCode}`);
-                    }
-                }
+                // Mapping save removed as Screen Implementation is deprecated
             }
 
             alert('Saved successfully!');
@@ -291,9 +258,11 @@ function WorkflowEditor() {
                         <Stack>
                             <TextInput label="Workflow Name" required {...form.getInputProps('workflowName')} />
                             <TextInput label="Workflow Code" required disabled={!!code} {...form.getInputProps('workflowCode')} />
+
+
                             <Select
                                 label="Module"
-                                data={['Overall', 'Credit Initiation', 'Financial Spreading', 'Credit Rating', 'Credit Approval', 'Sales', 'HR', 'Finance']}
+                                data={modules.length > 0 ? modules : ['Overall', 'Credit Initiation', 'Financial Spreading', 'Credit Rating', 'Credit Approval', 'Sales', 'HR', 'Finance']}
                                 {...form.getInputProps('associatedModule')}
                             />
                             <NumberInput
@@ -319,9 +288,8 @@ function WorkflowEditor() {
                                                 <Table.Th>Sequence</Table.Th>
                                                 <Table.Th>Name</Table.Th>
                                                 <Table.Th>Code</Table.Th>
-                                                <Table.Th>Is Nested?</Table.Th>
-                                                <Table.Th>Nested Code</Table.Th>
-                                                <Table.Th>Screen</Table.Th>
+                                                <Table.Th>Type</Table.Th>
+                                                <Table.Th>Detail</Table.Th>
                                                 <Table.Th>Actions</Table.Th>
                                                 <Table.Th>Actions</Table.Th>
                                             </Table.Tr>
@@ -332,10 +300,16 @@ function WorkflowEditor() {
                                                     <Table.Td>{s.sequenceOrder}</Table.Td>
                                                     <Table.Td>{s.stageName}</Table.Td>
                                                     <Table.Td>{s.stageCode}</Table.Td>
-                                                    <Table.Td>{s.isNestedWorkflow ? 'Yes' : 'No'}</Table.Td>
-                                                    <Table.Td>{s.nestedWorkflowCode || '-'}</Table.Td>
-                                                    <Table.Td>{s.screenCode || '-'}</Table.Td>
-                                                    <Table.Td>{s.allowedActions || '-'}</Table.Td>
+                                                    <Table.Td>
+                                                        {s.isNestedWorkflow ? <Group gap={5}><IconSettings size={16} /><Text size="xs">Nested</Text></Group> :
+                                                            s.isRuleStage ? <Group gap={5}><IconGavel size={16} /><Text size="xs">Rule</Text></Group> :
+                                                                <Group gap={5}><IconUser size={16} /><Text size="xs">User</Text></Group>
+                                                        }
+                                                    </Table.Td>
+                                                    <Table.Td>
+                                                        {s.isNestedWorkflow ? s.nestedWorkflowCode : (s.isRuleStage ? s.ruleKey : '-')}
+                                                    </Table.Td>
+                                                    <Table.Td>{s.actions?.map(a => a.actionLabel).join(', ') || s.allowedActions || '-'}</Table.Td>
                                                     <Table.Td>
                                                         <Group gap="xs">
                                                             <ActionIcon variant="subtle" color="blue" onClick={() => openEditModal(index)}>
@@ -361,106 +335,179 @@ function WorkflowEditor() {
                 </Tabs>
             </Paper>
 
-            <Modal opened={opened} onClose={close} title={editingIndex !== null ? "Edit Stage" : "Add Stage"} size="lg">
+            <Modal opened={opened} onClose={close} title={editingIndex !== null ? "Edit Stage" : "Add Stage"} size="xl">
                 <form onSubmit={stageForm.onSubmit(handleStageSubmit)}>
-                    <Stack>
-                        <SimpleGrid cols={2}>
-                            <TextInput label="Stage Name" required {...stageForm.getInputProps('stageName')} />
-                            <TextInput label="Stage Code" required {...stageForm.getInputProps('stageCode')} />
-                        </SimpleGrid>
+                    <Tabs defaultValue="general">
+                        <Tabs.List mb="md">
+                            <Tabs.Tab value="general">General</Tabs.Tab>
+                            <Tabs.Tab value="config">Configuration</Tabs.Tab>
+                            <Tabs.Tab value="actions">Actions</Tabs.Tab>
+                            <Tabs.Tab value="hooks">Hooks</Tabs.Tab>
+                        </Tabs.List>
 
-                        <NumberInput label="Sequence Order" required min={1} {...stageForm.getInputProps('sequenceOrder')} />
-
-                        {/* Stage Type Selector */}
-                        <Paper withBorder p="xs" mb="xs">
-                            <Text size="sm" fw={500} mb={5}>Stage Type</Text>
-                            <SegmentedControl
-                                value={
-                                    stageForm.values.isNestedWorkflow ? 'NESTED' :
-                                        stageForm.values.isRuleStage ? 'RULE' : 'USER'
-                                }
-                                onChange={(value) => {
-                                    stageForm.setFieldValue('isNestedWorkflow', value === 'NESTED');
-                                    stageForm.setFieldValue('isRuleStage', value === 'RULE');
-                                    if (value !== 'NESTED') stageForm.setFieldValue('nestedWorkflowCode', '');
-                                    if (value !== 'RULE') stageForm.setFieldValue('ruleKey', '');
-                                }}
-                                data={[
-                                    { label: 'User Task', value: 'USER' },
-                                    { label: 'Nested Workflow', value: 'NESTED' },
-                                    { label: 'Business Rule', value: 'RULE' },
-                                ]}
-                                fullWidth
-                            />
-                        </Paper>
-
-                        {stageForm.values.isNestedWorkflow && (
-                            <TextInput
-                                label="Nested Workflow Code"
-                                placeholder="WORKFLOW_CODE"
-                                required
-                                {...stageForm.getInputProps('nestedWorkflowCode')}
-                            />
-                        )}
-
-                        {stageForm.values.isRuleStage && (
-                            <TextInput
-                                label="Rule Key (Decision Table ID)"
-                                placeholder="e.g. RISK_RULE"
-                                description="The Key of the uploaded DMN table"
-                                required
-                                {...stageForm.getInputProps('ruleKey')}
-                            />
-                        )}
-
-                        {/* Parallel Configuration */}
-                        <Paper withBorder p="xs" bg="gray.0">
-                            <Title order={6} mb="xs">Execution Mode</Title>
-                            <TextInput
-                                label="Parallel Group ID"
-                                placeholder="e.g. GRP_APPROVAL"
-                                description="Stages with same Sequence & Group ID will run in parallel"
-                                {...stageForm.getInputProps('parallelGrouping')}
-                            />
-                        </Paper>
-
-
-                        {!stageForm.values.isNestedWorkflow && (
-                            <>
+                        <Tabs.Panel value="general">
+                            <Stack>
                                 <SimpleGrid cols={2}>
-                                    <Select
-                                        label="Screen Implementation"
-                                        placeholder="Select Screen"
-                                        data={screens.map(s => ({ value: s.screenCode, label: `${s.description} (${s.screenCode})` }))}
-                                        {...stageForm.getInputProps('screenCode')}
-                                    />
-                                    <Select
-                                        label="Access Type"
-                                        data={['EDITABLE', 'READ_ONLY']}
-                                        {...stageForm.getInputProps('accessType')}
-                                    />
+                                    <TextInput label="Stage Name" required {...stageForm.getInputProps('stageName')} />
+                                    <TextInput label="Stage Code" required {...stageForm.getInputProps('stageCode')} />
                                 </SimpleGrid>
+                                <NumberInput label="Sequence Order" required min={1} {...stageForm.getInputProps('sequenceOrder')} />
 
-                                <Title order={5} mt="sm">Hooks (Flowable Listeners)</Title>
-                                <SimpleGrid cols={2}>
-                                    <TextInput label="Pre-Entry Class (ExecutionListener: start)" placeholder="com.example.MyStartListener" {...stageForm.getInputProps('preEntryHook')} />
-                                    <TextInput label="Post-Entry Class (TaskListener: create)" placeholder="com.example.MyCreateListener" {...stageForm.getInputProps('postEntryHook')} />
-                                    <TextInput label="Pre-Exit Class (TaskListener: complete)" placeholder="com.example.MyCompleteListener" {...stageForm.getInputProps('preExitHook')} />
-                                    <TextInput label="Post-Exit Class (ExecutionListener: end)" placeholder="com.example.MyEndListener" {...stageForm.getInputProps('postExitHook')} />
-                                </SimpleGrid>
 
-                                <Title order={5} mt="sm">Outcome Actions</Title>
-                                <TextInput
-                                    label="Allowed Actions"
-                                    placeholder="e.g. APPROVE,REJECT,ON-HOLD (comma separated)"
-                                    description="Leave empty for default 'Complete' action"
-                                    {...stageForm.getInputProps('allowedActions')}
-                                />
-                            </>
-                        )}
 
-                        <Button type="submit">{editingIndex !== null ? "Update" : "Add"}</Button>
-                    </Stack>
+                                <Paper withBorder p="xs" bg="gray.0">
+                                    <Title order={6} mb="xs">Execution Mode</Title>
+                                    <TextInput
+                                        label="Parallel Group ID"
+                                        placeholder="e.g. GRP_APPROVAL"
+                                        description="Stages with same Sequence & Group ID will run in parallel"
+                                        {...stageForm.getInputProps('parallelGrouping')}
+                                    />
+                                </Paper>
+                            </Stack>
+                        </Tabs.Panel>
+
+                        <Tabs.Panel value="config">
+                            <Stack>
+                                <Paper withBorder p="xs" mb="xs">
+                                    <Text size="sm" fw={500} mb={5}>Stage Type</Text>
+                                    <SegmentedControl
+                                        value={
+                                            stageForm.values.isNestedWorkflow ? 'NESTED' :
+                                                stageForm.values.isRuleStage ? 'RULE' : 'USER'
+                                        }
+                                        onChange={(value) => {
+                                            stageForm.setFieldValue('isNestedWorkflow', value === 'NESTED');
+                                            stageForm.setFieldValue('isRuleStage', value === 'RULE');
+                                            if (value !== 'NESTED') stageForm.setFieldValue('nestedWorkflowCode', '');
+                                            if (value !== 'RULE') stageForm.setFieldValue('ruleKey', '');
+                                        }}
+                                        data={[
+                                            { label: 'User Task', value: 'USER' },
+                                            { label: 'Nested Workflow', value: 'NESTED' },
+                                            { label: 'Business Rule', value: 'RULE' },
+                                        ]}
+                                        fullWidth
+                                    />
+                                </Paper>
+
+                                {stageForm.values.isNestedWorkflow && (
+                                    <TextInput
+                                        label="Nested Workflow Code"
+                                        placeholder="WORKFLOW_CODE"
+                                        required
+                                        {...stageForm.getInputProps('nestedWorkflowCode')}
+                                    />
+                                )}
+
+                                {stageForm.values.isRuleStage && (
+                                    <TextInput
+                                        label="Rule Key (Decision Table ID)"
+                                        placeholder="e.g. RISK_RULE"
+                                        description="The Key of the uploaded DMN table"
+                                        required
+                                        {...stageForm.getInputProps('ruleKey')}
+                                    />
+                                )}
+
+                                <Paper withBorder p="xs" mt="sm">
+                                    <Text size="sm" fw={500} mb={5}>Entry Rules</Text>
+                                    <TextInput
+                                        label="Entry Condition (Expression)"
+                                        placeholder="${amount > 1000}"
+                                        description="Full UEL Expression required. E.g. ${creditScore <= 500}. Wraps the entire condition."
+                                        {...stageForm.getInputProps('entryCondition')}
+                                    />
+                                </Paper>
+                            </Stack>
+                        </Tabs.Panel>
+
+                        <Tabs.Panel value="hooks">
+                            <SimpleGrid cols={2}>
+                                <TextInput label="Pre-Entry" placeholder="com.example.Listener" {...stageForm.getInputProps('preEntryHook')} />
+                                <TextInput label="Post-Entry" placeholder="com.example.Listener" {...stageForm.getInputProps('postEntryHook')} />
+                                <TextInput label="Pre-Exit" placeholder="com.example.Listener" {...stageForm.getInputProps('preExitHook')} />
+                                <TextInput label="Post-Exit" placeholder="com.example.Listener" {...stageForm.getInputProps('postExitHook')} />
+                            </SimpleGrid>
+                        </Tabs.Panel>
+
+                        <Tabs.Panel value="actions">
+                            <Stack>
+                                <Group justify="space-between">
+                                    <Text fw={500}>Stage Actions</Text>
+                                    <Button size="xs" variant="light" onClick={() => {
+                                        const newAction: StageAction = { actionLabel: 'New Action', buttonStyle: 'primary', targetType: 'NEXT' };
+                                        stageForm.insertListItem('actions', newAction);
+                                    }}>
+                                        + Add Action
+                                    </Button>
+                                </Group>
+
+                                <Table verticalSpacing="xs">
+                                    <Table.Thead>
+                                        <Table.Tr>
+                                            <Table.Th>Label</Table.Th>
+                                            <Table.Th>Style</Table.Th>
+                                            <Table.Th>Target Type</Table.Th>
+                                            <Table.Th>Target Stage</Table.Th>
+                                            <Table.Th>Post-Status</Table.Th>
+                                            <Table.Th></Table.Th>
+                                        </Table.Tr>
+                                    </Table.Thead>
+                                    <Table.Tbody>
+                                        {stageForm.values.actions?.map((action, idx) => (
+                                            <Table.Tr key={idx}>
+                                                <Table.Td>
+                                                    <TextInput size="xs" {...stageForm.getInputProps(`actions.${idx}.actionLabel`)} />
+                                                </Table.Td>
+                                                <Table.Td>
+                                                    <Select
+                                                        size="xs"
+                                                        data={['primary', 'success', 'danger', 'warning', 'default']}
+                                                        {...stageForm.getInputProps(`actions.${idx}.buttonStyle`)}
+                                                    />
+                                                </Table.Td>
+                                                <Table.Td>
+                                                    <Select
+                                                        size="xs"
+                                                        data={['NEXT', 'SPECIFIC', 'END']}
+                                                        {...stageForm.getInputProps(`actions.${idx}.targetType`)}
+                                                    />
+                                                </Table.Td>
+                                                <Table.Td>
+                                                    {action.targetType === 'SPECIFIC' && (
+                                                        <Select
+                                                            size="xs"
+                                                            placeholder="Stage Code"
+                                                            data={stages.filter(s => s.stageCode !== stageForm.values.stageCode).map(s => s.stageCode)}
+                                                            {...stageForm.getInputProps(`actions.${idx}.targetStage`)}
+                                                        />
+                                                    )}
+                                                </Table.Td>
+                                                <Table.Td>
+                                                    <TextInput size="xs" placeholder="e.g. APPROVED" {...stageForm.getInputProps(`actions.${idx}.postActionStatus`)} />
+                                                </Table.Td>
+                                                <Table.Td>
+                                                    <ActionIcon color="red" onClick={() => stageForm.removeListItem('actions', idx)}>
+                                                        <IconTrash size={16} />
+                                                    </ActionIcon>
+                                                </Table.Td>
+                                            </Table.Tr>
+                                        ))}
+                                        {(!stageForm.values.actions || stageForm.values.actions.length === 0) && (
+                                            <Table.Tr>
+                                                <Table.Td colSpan={6} align="center">
+                                                    <Text size="xs" c="dimmed">No actions configured. Standard completion.</Text>
+                                                </Table.Td>
+                                            </Table.Tr>
+                                        )}
+                                    </Table.Tbody>
+                                </Table>
+                            </Stack>
+                        </Tabs.Panel>
+                    </Tabs>
+
+                    <Button type="submit" mt="md" fullWidth>{editingIndex !== null ? "Update Stage" : "Add Stage"}</Button>
                 </form>
             </Modal>
 

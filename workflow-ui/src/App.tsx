@@ -10,7 +10,7 @@ import { ScreenDefinitionEditor } from './components/screens/ScreenDefinitionEdi
 import CaseView from './pages/CaseView';
 import AuditLog from './pages/AuditLog';
 import RuleManagement from './pages/RuleManagement';
-
+import ModuleMaster from './pages/ModuleMaster';
 import Header from './components/Header';
 
 function App() {
@@ -30,6 +30,7 @@ function App() {
           <Route path="/cases/:id" element={<CaseView />} />
           <Route path="/audit" element={<AuditLog />} />
           <Route path="/rules" element={<RuleManagement />} />
+          <Route path="/modules" element={<ModuleMaster />} />
         </Routes>
       </BrowserRouter>
     </MantineProvider>

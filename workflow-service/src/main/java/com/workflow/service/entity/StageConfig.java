@@ -42,9 +42,14 @@ public class StageConfig {
     // SLA Configuration (G.5)
     private java.math.BigDecimal slaDurationDays;
 
-    // K. Stage Actions
-    @Column(columnDefinition = "TEXT") // JSON or Comma-Separated
-    private String allowedActions; // e.g. ["APPROVE", "REJECT"]
+    // K. Stage Actions (Refactored to separate table)
+    @OneToMany(mappedBy = "stageConfig", cascade = CascadeType.ALL, orphanRemoval = true)
+    @com.fasterxml.jackson.annotation.JsonManagedReference
+    private java.util.List<StageAction> actions = new java.util.ArrayList<>();
+
+    // Migration Support
+    @Column(name = "allowed_actions_legacy", columnDefinition = "TEXT")
+    private String allowedActionsLegacy;
 
     // T. Parallel Stages
     private String parallelGrouping;
@@ -54,6 +59,10 @@ public class StageConfig {
     private Boolean isRuleStage = false;
 
     private String ruleKey;
+
+    // Z. Advanced Routing
+    @Column(columnDefinition = "TEXT")
+    private String entryCondition; // Expression to evaluate before entering stage
 
     public boolean isRuleStage() {
         return Boolean.TRUE.equals(this.isRuleStage);

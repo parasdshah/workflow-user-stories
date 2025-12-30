@@ -16,6 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 class BpmnGeneratorServiceTest {
 
     private ScreenMappingRepository screenMappingRepository;
@@ -24,7 +26,8 @@ class BpmnGeneratorServiceTest {
     @BeforeEach
     void setUp() {
         screenMappingRepository = Mockito.mock(ScreenMappingRepository.class);
-        bpmnGeneratorService = new BpmnGeneratorService(screenMappingRepository);
+        ObjectMapper objectMapper = new ObjectMapper();
+        bpmnGeneratorService = new BpmnGeneratorService(screenMappingRepository, objectMapper);
     }
 
     @Test

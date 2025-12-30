@@ -26,16 +26,5 @@ public class RuntimeController {
         return ResponseEntity.ok(instance.isEnded() ? "COMPLETED" : "ACTIVE");
     }
 
-    @GetMapping("/cases")
-    public ResponseEntity<List<CaseDto>> getAllCases() {
-        // List all active cases
-        List<ProcessInstance> instances = runtimeStatusService.getAllCases();
-        List<CaseDto> dtos = instances.stream()
-                .map(i -> new CaseDto(i.getId(), i.getProcessDefinitionKey(), i.getStartTime()))
-                .collect(Collectors.toList());
-        return ResponseEntity.ok(dtos);
-    }
 
-    record CaseDto(String id, String workflowCode, java.util.Date startTime) {
-    }
 }

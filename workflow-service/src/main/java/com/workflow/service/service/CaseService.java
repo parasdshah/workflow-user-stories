@@ -61,6 +61,15 @@ public class CaseService {
         }
     }
 
+
+
+    public List<CaseDTO> getAllActiveCases() {
+        List<ProcessInstance> instances = runtimeService.createProcessInstanceQuery()
+                .orderByStartTime().desc()
+                .list();
+        return instances.stream().map(this::mapToCaseDTO).collect(java.util.stream.Collectors.toList());
+    }
+
     public CaseDTO getCaseDetails(String caseId) {
         // Try active process first
         ProcessInstance activeProcess = runtimeService.createProcessInstanceQuery()
@@ -90,7 +99,9 @@ public class CaseService {
         List<HistoricTaskInstance> historicTasks = historyService.createHistoricTaskInstanceQuery()
                 .processInstanceId(caseId)
                 .finished()
+                .finished()
                 .includeTaskLocalVariables() // Fetch local vars for actionTaken
+                .includeProcessVariables() // Fetch process vars for display
                 .orderByTaskCreateTime().asc()
                 .list();
 
@@ -102,6 +113,7 @@ public class CaseService {
         List<Task> activeTasks = taskService.createTaskQuery()
                 .processInstanceId(caseId)
                 .active()
+                .includeProcessVariables() // Fetch process vars
                 .orderByTaskCreateTime().asc()
                 .list();
 
@@ -132,6 +144,7 @@ public class CaseService {
                 .taskAssignee(userId)
                 .finished()
                 .includeTaskLocalVariables()
+                .includeProcessVariables()
                 .orderByHistoricTaskInstanceEndTime().desc()
                 .list();
 
@@ -177,13 +190,14 @@ public class CaseService {
                         .findByWorkflowCodeAndStageCode(workflowCode, stageCode);
 
                 if (configOpt.isPresent()) {
-                    String allowed = configOpt.get().getAllowedActions();
-                    if (allowed != null && !allowed.isEmpty()) {
-                        // Parse allowed actions (simple check for now, assuming JSON array or comma
-                        // separated)
-                        if (!allowed.contains(outcome)) {
-                            throw new IllegalArgumentException(
-                                    "Invalid outcome: " + outcome + ". Allowed actions: " + allowed);
+                    var actions = configOpt.get().getActions();
+                    if (actions != null && !actions.isEmpty()) {
+                        boolean isValid = actions.stream()
+                            .anyMatch(a -> a.getActionLabel().equals(outcome)); // Strict match on label
+                        
+                        if (!isValid) {
+                             throw new IllegalArgumentException(
+                                    "Invalid outcome: " + outcome + ". Allowed actions: " + actions.stream().map(com.workflow.service.entity.StageAction::getActionLabel).collect(java.util.stream.Collectors.toList()));
                         }
                     }
                 }
@@ -218,6 +232,12 @@ public class CaseService {
                     .ifPresent(w -> dto.setWorkflowName(w.getWorkflowName()));
         }
 
+        try {
+            dto.setProcessVariables(runtimeService.getVariables(process.getId()));
+        } catch (Exception e) {
+            // ignore
+        }
+
         return dto;
     }
 
@@ -238,6 +258,19 @@ public class CaseService {
         if (dto.getWorkflowName() == null) {
             workflowRepository.findByWorkflowCode(process.getProcessDefinitionKey())
                     .ifPresent(w -> dto.setWorkflowName(w.getWorkflowName()));
+        }
+
+        try {
+            List<org.flowable.variable.api.history.HistoricVariableInstance> vars = historyService.createHistoricVariableInstanceQuery()
+                    .processInstanceId(process.getId())
+                    .list();
+            Map<String, Object> varMap = new HashMap<>();
+            for (org.flowable.variable.api.history.HistoricVariableInstance var : vars) {
+                varMap.put(var.getVariableName(), var.getValue());
+            }
+            dto.setProcessVariables(varMap);
+        } catch (Exception e) {
+            // ignore
         }
 
         return dto;
@@ -285,6 +318,7 @@ public class CaseService {
             dto.setActionTaken((String) task.getTaskLocalVariables().get("outcome"));
         }
 
+        dto.setProcessVariables(task.getProcessVariables());
         return dto;
     }
 
@@ -293,6 +327,7 @@ public class CaseService {
                 task.getCreateTime(), task.getDueDate(), task.getId(), task.getProcessDefinitionId(),
                 task.getProcessInstanceId());
         dto.setStatus(status);
+        dto.setProcessVariables(task.getProcessVariables());
         return dto;
     }
 
@@ -343,7 +378,27 @@ public class CaseService {
                 if (pd != null) {
                     dto.setWorkflowCode(pd.getKey()); // Populate workflowCode
                     stageConfigRepository.findByWorkflowCodeAndStageCode(pd.getKey(), code)
-                            .ifPresent(config -> dto.setAllowedActions(config.getAllowedActions()));
+                            .ifPresent(config -> {
+                                if (config.getActions() != null && !config.getActions().isEmpty()) {
+                                    try {
+                                        // Map to list of simple maps for JSON compatibility
+                                        java.util.List<java.util.Map<String, String>> actionMaps = config.getActions().stream()
+                                            .map(a -> {
+                                                java.util.Map<String, String> m = new java.util.HashMap<>();
+                                                m.put("label", a.getActionLabel());
+                                                m.put("value", a.getActionLabel()); // Use label as value
+                                                m.put("style", a.getButtonStyle());
+                                                m.put("target", a.getTargetType());
+                                                m.put("postStatus", a.getPostActionStatus());
+                                                return m;
+                                            })
+                                            .collect(java.util.stream.Collectors.toList());
+                                        dto.setAllowedActions(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(actionMaps));
+                                    } catch (Exception e) {
+                                        log.warn("Failed to serialize actions for stage: {}", code, e);
+                                    }
+                                }
+                            });
                 }
             }
         } catch (Exception e) {
