@@ -1,10 +1,11 @@
 import { Container, Title, Button, TextInput, Group, Stack, Paper, Select, NumberInput, Modal, Table, ActionIcon, SimpleGrid, Tabs, SegmentedControl, Text } from '@mantine/core';
-import { IconEdit, IconTrash, IconGitBranch, IconUser, IconSettings, IconGavel } from '@tabler/icons-react';
+import { IconEdit, IconTrash, IconGitBranch, IconUser, IconSettings, IconGavel, IconArrowsSplit, IconSitemap } from '@tabler/icons-react';
 import { useForm } from '@mantine/form';
 import { useDisclosure } from '@mantine/hooks';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { BpmnVisualizer } from '../components/bpmn/BpmnVisualizer';
+import { FlowchartVisualizer } from '../components/bpmn/FlowchartVisualizer';
 
 // Define types locally or import from a shared types file
 interface StageAction {
@@ -35,6 +36,8 @@ interface StageConfig {
     entryCondition?: string;
     // Legacy support for display if needed, but we prefer 'actions'
     allowedActions?: string;
+    routingRules?: string; // JSON string
+    routingRulesList?: any[]; // UI only
 }
 
 
@@ -85,7 +88,8 @@ function WorkflowEditor() {
             parallelGrouping: '',
             isRuleStage: false,
             ruleKey: '',
-            entryCondition: ''
+            entryCondition: '',
+            routingRulesList: [] as { condition: string, targetStageCode: string }[]
         }
     });
 
@@ -95,11 +99,19 @@ function WorkflowEditor() {
         if (editingIndex !== null) {
             // Update existing
             const updated = [...stages];
-            updated[editingIndex] = values;
+            const payload = {
+                ...values,
+                routingRules: JSON.stringify(values.routingRulesList)
+            };
+            updated[editingIndex] = payload;
             setStages(updated);
         } else {
             // Add new
-            setStages([...stages, values]);
+            const payload = {
+                ...values,
+                routingRules: JSON.stringify(values.routingRulesList)
+            };
+            setStages([...stages, payload]);
         }
         close();
         stageForm.reset();
@@ -130,7 +142,8 @@ function WorkflowEditor() {
             parallelGrouping: stage.parallelGrouping || '',
             isRuleStage: stage.isRuleStage || false,
             ruleKey: stage.ruleKey || '',
-            entryCondition: stage.entryCondition || ''
+            entryCondition: stage.entryCondition || '',
+            routingRulesList: stage.routingRules ? JSON.parse(stage.routingRules) : []
         });
         open();
     };
@@ -251,7 +264,8 @@ function WorkflowEditor() {
                 <Tabs defaultValue="config">
                     <Tabs.List mb="md">
                         <Tabs.Tab value="config" leftSection={<IconEdit size={14} />}>Configuration</Tabs.Tab>
-                        <Tabs.Tab value="diagram" leftSection={<IconGitBranch size={14} />}>Diagram</Tabs.Tab>
+                        <Tabs.Tab value="diagram" leftSection={<IconGitBranch size={14} />}>BPMN Diagram</Tabs.Tab>
+                        <Tabs.Tab value="tree" leftSection={<IconSitemap size={14} />}>Decision Tree</Tabs.Tab>
                     </Tabs.List>
 
                     <Tabs.Panel value="config">
@@ -301,10 +315,18 @@ function WorkflowEditor() {
                                                     <Table.Td>{s.stageName}</Table.Td>
                                                     <Table.Td>{s.stageCode}</Table.Td>
                                                     <Table.Td>
-                                                        {s.isNestedWorkflow ? <Group gap={5}><IconSettings size={16} /><Text size="xs">Nested</Text></Group> :
-                                                            s.isRuleStage ? <Group gap={5}><IconGavel size={16} /><Text size="xs">Rule</Text></Group> :
-                                                                <Group gap={5}><IconUser size={16} /><Text size="xs">User</Text></Group>
-                                                        }
+                                                        <Stack gap={4}>
+                                                            {s.isNestedWorkflow ? <Group gap={5}><IconSettings size={16} /><Text size="xs">Nested</Text></Group> :
+                                                                s.isRuleStage ? <Group gap={5}><IconGavel size={16} /><Text size="xs">Rule</Text></Group> :
+                                                                    <Group gap={5}><IconUser size={16} /><Text size="xs">User</Text></Group>
+                                                            }
+                                                            {s.routingRules && s.routingRules !== '[]' && (
+                                                                <Group gap={5}>
+                                                                    <IconArrowsSplit size={16} color="orange" />
+                                                                    <Text size="xs" c="orange" fw={500}>Branch</Text>
+                                                                </Group>
+                                                            )}
+                                                        </Stack>
                                                     </Table.Td>
                                                     <Table.Td>
                                                         {s.isNestedWorkflow ? s.nestedWorkflowCode : (s.isRuleStage ? s.ruleKey : '-')}
@@ -332,6 +354,10 @@ function WorkflowEditor() {
                     <Tabs.Panel value="diagram">
                         <BpmnVisualizer stages={stages} workflow={form.values} />
                     </Tabs.Panel>
+
+                    <Tabs.Panel value="tree">
+                        <FlowchartVisualizer stages={stages} workflow={form.values} />
+                    </Tabs.Panel>
                 </Tabs>
             </Paper>
 
@@ -342,6 +368,7 @@ function WorkflowEditor() {
                             <Tabs.Tab value="general">General</Tabs.Tab>
                             <Tabs.Tab value="config">Configuration</Tabs.Tab>
                             <Tabs.Tab value="actions">Actions</Tabs.Tab>
+                            <Tabs.Tab value="routing">Routing/Branching</Tabs.Tab>
                             <Tabs.Tab value="hooks">Hooks</Tabs.Tab>
                         </Tabs.List>
 
@@ -498,6 +525,63 @@ function WorkflowEditor() {
                                             <Table.Tr>
                                                 <Table.Td colSpan={6} align="center">
                                                     <Text size="xs" c="dimmed">No actions configured. Standard completion.</Text>
+                                                </Table.Td>
+                                            </Table.Tr>
+                                        )}
+                                    </Table.Tbody>
+                                </Table>
+                            </Stack>
+                        </Tabs.Panel>
+
+                        <Tabs.Panel value="routing">
+                            <Stack>
+                                <Paper withBorder p="xs" bg="blue.0" mb="sm">
+                                    <Text size="sm">Define logic to branch to different stages based on variables. Rules are evaluated in order.</Text>
+                                </Paper>
+                                <Group justify="space-between">
+                                    <Text fw={500}>Branching Rules</Text>
+                                    <Button size="xs" variant="light" onClick={() => {
+                                        stageForm.insertListItem('routingRulesList', { condition: '', targetStageCode: '' });
+                                    }}>
+                                        + Add Rule
+                                    </Button>
+                                </Group>
+
+                                <Table>
+                                    <Table.Thead>
+                                        <Table.Tr>
+                                            <Table.Th style={{ width: '50%' }}>Condition (ex: ${"${amount > 1000}"})</Table.Th>
+                                            <Table.Th>Target Stage</Table.Th>
+                                            <Table.Th style={{ width: 50 }}></Table.Th>
+                                        </Table.Tr>
+                                    </Table.Thead>
+                                    <Table.Tbody>
+                                        {stageForm.values.routingRulesList?.map((_: any, idx: number) => (
+                                            <Table.Tr key={idx}>
+                                                <Table.Td>
+                                                    <TextInput
+                                                        placeholder="${variable == 'value'}"
+                                                        {...stageForm.getInputProps(`routingRulesList.${idx}.condition`)}
+                                                    />
+                                                </Table.Td>
+                                                <Table.Td>
+                                                    <Select
+                                                        placeholder="Select Stage"
+                                                        data={stages.filter(s => s.stageCode !== stageForm.values.stageCode).map(s => s.stageCode)}
+                                                        {...stageForm.getInputProps(`routingRulesList.${idx}.targetStageCode`)}
+                                                    />
+                                                </Table.Td>
+                                                <Table.Td>
+                                                    <ActionIcon color="red" onClick={() => stageForm.removeListItem('routingRulesList', idx)}>
+                                                        <IconTrash size={16} />
+                                                    </ActionIcon>
+                                                </Table.Td>
+                                            </Table.Tr>
+                                        ))}
+                                        {(!stageForm.values.routingRulesList || stageForm.values.routingRulesList.length === 0) && (
+                                            <Table.Tr>
+                                                <Table.Td colSpan={3} align="center">
+                                                    <Text size="xs" c="dimmed">No branching rules. Flow continues to next sequence.</Text>
                                                 </Table.Td>
                                             </Table.Tr>
                                         )}

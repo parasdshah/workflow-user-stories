@@ -41,149 +41,121 @@ public class BpmnGeneratorService {
         startEvent.setId("start");
         process.addFlowElement(startEvent);
 
-        FlowElement previousElement = startEvent;
+        FlowElement lastElement = startEvent;
 
         // Sort stages by sequence
         stages.sort((s1, s2) -> s1.getSequenceOrder().compareTo(s2.getSequenceOrder()));
 
-        // Group stages by Sequence Order + Parallel Grouping
-        List<List<StageConfig>> groupedStages = groupStages(stages);
+        // Create Valid Map of StageCode -> FlowElement (UserTask/ServiceTask/CallActivity)
+        Map<String, FlowElement> stageElements = new java.util.HashMap<>();
+        
+        // 1. Create All Stage Elements First (Nodes)
+        for (StageConfig stage : stages) {
+            FlowElement el = createStageElement(process, stage, workflow);
+            process.addFlowElement(el);
+            stageElements.put(stage.getStageCode(), el);
+            
+            // Add SLA behavior (Boundary Events) attached to this element
+            addSlaIfConfigured(process, el, stage, workflow);
+        }
 
-        for (List<StageConfig> group : groupedStages) {
-            if (group.isEmpty())
-                continue;
-
-            if (group.size() == 1) {
-                // Single Stage (Standard Flow)
-                StageConfig stage = group.get(0);
-                FlowElement stageElement = createStageElement(process, stage, workflow);
-                process.addFlowElement(stageElement);
-
-                // 1. Entry Condition (Skip Logic)
-                FlowElement exitPoint = stageElement;
-
-                if (stage.getEntryCondition() != null && !stage.getEntryCondition().isBlank()) {
-                    ExclusiveGateway split = new ExclusiveGateway();
-                    split.setId("entry_split_" + stage.getStageCode());
-                    process.addFlowElement(split);
-
-                    ExclusiveGateway join = new ExclusiveGateway();
-                    join.setId("entry_join_" + stage.getStageCode());
-                    process.addFlowElement(join);
-
-                    // Connect Previous -> Split
-                    connect(process, previousElement, split);
-
-                    // Split -> Stage (Condition Met)
-                    SequenceFlow enterFlow = connect(process, split, stageElement);
-                    enterFlow.setConditionExpression(stage.getEntryCondition());
-
-                    // Split -> Join (Skip)
-                    SequenceFlow skipFlow = connect(process, split, join);
-                    // This skip flow acts as the path if condition is false.
-                    // To be explicit, we could rely on default flow behavior or inverse condition.
-                    // For now, Flowable handles standard condition eval. If one has condition and
-                    // other doesn't,
-                    // the one without condition acts as default/fallback usually.
-                    split.setDefaultFlow(skipFlow.getId());
-
-                    // Stage -> Join
-                    connect(process, stageElement, join);
-
-                    exitPoint = join;
+        // 2. Connect Elements (Edges)
+        // We iterate through the sorted list to establish default flows
+        for (int i = 0; i < stages.size(); i++) {
+            StageConfig currentStage = stages.get(i);
+            FlowElement currentElement = stageElements.get(currentStage.getStageCode());
+            
+            // Connect Predecessor -> Current (Only if strictly sequential and not already targeted by jump)
+            // Actually, for proper graph, we handle "Outbound" connections from Previous to Current
+            // Logic: The "Start" connects to the first stage.
+            if (i == 0) {
+                // Connect Start -> First Stage
+                if (currentStage.getEntryCondition() != null && !currentStage.getEntryCondition().isBlank()) {
+                     // Entry Condition Logic for First Stage
+                     // Start -> Split -> (Cond) -> FirstStage
+                     //                -> (Def) -> End (Skip) or Next?
+                     // Simplification: Entry Conditions usually strictly skip *this* stage to *next* stage.
+                     // But if it's the first stage, skipping might mean ending? Or going to 2nd?
+                     handleEntryCondition(process, startEvent, currentElement, currentStage, getNextStageElement(stages, i, stageElements));
                 } else {
-                    // Standard Connect
-                    connect(process, previousElement, stageElement);
+                     connect(process, startEvent, currentElement);
                 }
+            }
+            
+            // Determine Outbound Flows from Current Stage
+            FlowElement source = currentElement;
+            FlowElement defaultTarget = getNextStageElement(stages, i, stageElements);
 
-                // Handle SLA
-                addSlaIfConfigured(process, stageElement, stage, workflow);
-
-                // 2. Action Routing (Post-Stage Branching)
-                if (stage.getActions() != null && !stage.getActions().isEmpty()) {
-                    // Check if any action needs routing
-                    boolean hasRouting = stage.getActions().stream()
-                            .anyMatch(a -> "SPECIFIC".equals(a.getTargetType()) || "END".equals(a.getTargetType()));
-
-                    if (hasRouting) {
-                        ExclusiveGateway actionSplit = new ExclusiveGateway();
-                        actionSplit.setId("action_split_" + stage.getStageCode());
-                        process.addFlowElement(actionSplit);
-
-                        connect(process, exitPoint, actionSplit);
+            // A. Routing Rules (Branching)
+            if (currentStage.getRoutingRules() != null && !currentStage.getRoutingRules().isBlank()) {
+                // Add Exclusive Gateway for Branching
+                ExclusiveGateway gateway = new ExclusiveGateway();
+                gateway.setId("gateway_split_" + currentStage.getStageCode());
+                process.addFlowElement(gateway);
+                
+                // Connect Stage -> Gateway
+                connect(process, source, gateway);
+                
+                try {
+                    List<Map<String, String>> rules = objectMapper.readValue(currentStage.getRoutingRules(), new TypeReference<List<Map<String, String>>>(){});
+                    boolean hasDefault = false;
+                    
+                    for (Map<String, String> rule : rules) {
+                        String condition = rule.get("condition");
+                        String targetCode = rule.get("targetStageCode");
+                        FlowElement targetEl = stageElements.get(targetCode);
                         
-                        // Create flows for routed actions
-                        for (com.workflow.service.entity.StageAction action : stage.getActions()) {
-                            String targetType = action.getTargetType();
-                            String label = action.getActionLabel(); 
-                            
-                            if ("SPECIFIC".equals(targetType)) {
-                                String targetStageCode = action.getTargetStage();
-                                if(targetStageCode != null) {
-                                    SequenceFlow flow = new SequenceFlow();
-                                    flow.setSourceRef(actionSplit.getId());
-                                    flow.setTargetRef(targetStageCode);
-                                    flow.setConditionExpression("${outcome == '" + label + "'}");
-                                    process.addFlowElement(flow);
-                                }
-                            } else if ("END".equals(targetType)) {
-                                EndEvent end = new EndEvent();
-                                end.setId("end_" + stage.getStageCode() + "_" + label);
-                                process.addFlowElement(end);
-
-                                SequenceFlow flow = connect(process, actionSplit, end);
-                                flow.setConditionExpression("${outcome == '" + label + "'}");
+                        if (targetEl != null) {
+                            SequenceFlow flow = connect(process, gateway, targetEl);
+                            if (condition != null && !condition.isBlank()) {
+                                flow.setConditionExpression(condition);
+                            } else {
+                                // Empty condition might imply default flow in UI config? 
+                                // Or we treat it as specific "Always" path?
+                                // Standard: Condition required.
                             }
                         }
-                        
-                        exitPoint = actionSplit;
                     }
+                    
+                    // Default Flow (if no condition met) -> Next Sequential Stage
+                    if (defaultTarget != null) {
+                        SequenceFlow defFlow = connect(process, gateway, defaultTarget);
+                        gateway.setDefaultFlow(defFlow.getId());
+                    } else {
+                        // End of workflow
+                         EndEvent end = new EndEvent();
+                         end.setId("end_" + currentStage.getStageCode());
+                         process.addFlowElement(end);
+                         SequenceFlow defFlow = connect(process, gateway, end);
+                         gateway.setDefaultFlow(defFlow.getId());
+                    }
+
+                } catch(Exception e) {
+                   log.error("Failed to parse routing rules for stage " + currentStage.getStageCode(), e);
+                   // Fallback to strict sequence
+                   if (defaultTarget != null) connect(process, source, defaultTarget);
                 }
 
-                previousElement = exitPoint;
             } else {
-                // Parallel Block
-                ParallelGateway split = new ParallelGateway();
-                split.setId("split_" + group.get(0).getSequenceOrder());
-                process.addFlowElement(split);
-                connect(process, previousElement, split);
-
-                ParallelGateway join = new ParallelGateway();
-                join.setId("join_" + group.get(0).getSequenceOrder());
-                process.addFlowElement(join);
-
-                for (StageConfig stage : group) {
-                    FlowElement stageElement = createStageElement(process, stage, workflow);
-                    process.addFlowElement(stageElement);
-
-                    connect(process, split, stageElement);
-                    connect(process, stageElement, join);
-
-                    addSlaIfConfigured(process, stageElement, stage, workflow);
+                // B. Standard Sequential Flow
+                // Check if Next Stage has Entry Condition (Skip Logic)
+                if (defaultTarget != null) {
+                     StageConfig nextStage = stages.get(i+1); // Safe because defaultTarget not null implies i+1 exists
+                     if (nextStage.getEntryCondition() != null && !nextStage.getEntryCondition().isBlank()) {
+                         // Connect Source -> [EntryLogic] -> Target
+                         handleEntryCondition(process, source, defaultTarget, nextStage, getNextStageElement(stages, i+1, stageElements));
+                     } else {
+                         connect(process, source, defaultTarget);
+                     }
+                } else {
+                    // No next stage -> End
+                    EndEvent end = new EndEvent();
+                    end.setId("end");
+                    process.addFlowElement(end);
+                    connect(process, source, end);
                 }
-
-                previousElement = join;
             }
         }
-
-        // Completion Mapping
-        if (workflow.getCompletionApiEndpoint() != null && !workflow.getCompletionApiEndpoint().isBlank()) {
-            ServiceTask completionTask = new ServiceTask();
-            completionTask.setId("completionServiceTask");
-            completionTask.setName("Call Completion API");
-            completionTask.setImplementationType(ImplementationType.IMPLEMENTATION_TYPE_DELEGATEEXPRESSION);
-            completionTask.setImplementation("${completionService}");
-
-            process.addFlowElement(completionTask);
-            connect(process, previousElement, completionTask);
-            previousElement = completionTask;
-        }
-
-        // End Event
-        EndEvent endEvent = new EndEvent();
-        endEvent.setId("end");
-        process.addFlowElement(endEvent);
-        connect(process, previousElement, endEvent);
 
         // Auto Layout
         new BpmnAutoLayout(model).execute();
@@ -192,21 +164,8 @@ public class BpmnGeneratorService {
         byte[] bytes = converter.convertToXML(model);
         return new String(bytes);
     }
-
-    private List<List<StageConfig>> groupStages(List<StageConfig> stages) {
-        // Group by Sequence ID. If 'parallelGrouping' is set, verify consistency.
-        // Simple Logic: Iterate and group by sequence.
-        List<List<StageConfig>> groups = new java.util.ArrayList<>();
-        if (stages.isEmpty())
-            return groups;
-
-        java.util.Map<Integer, List<StageConfig>> map = new java.util.TreeMap<>(); // Sorted by sequence
-        for (StageConfig s : stages) {
-            map.computeIfAbsent(s.getSequenceOrder(), k -> new java.util.ArrayList<>()).add(s);
-        }
-        return new java.util.ArrayList<>(map.values());
-    }
-
+    
+    
     private FlowElement createStageElement(Process process, StageConfig stage, WorkflowMaster workflow) {
         FlowElement stageElement;
         if (stage.isNestedWorkflow()) {
@@ -252,6 +211,42 @@ public class BpmnGeneratorService {
                 userTask.getTaskListeners().add(createListener(stage.getPreExitHook(), "complete"));
             }
         }
+    }
+
+    private FlowElement getNextStageElement(List<StageConfig> stages, int currentIndex, Map<String, FlowElement> elementMap) {
+        if (currentIndex + 1 < stages.size()) {
+            return elementMap.get(stages.get(currentIndex + 1).getStageCode());
+        }
+        return null;
+    }
+
+    private void handleEntryCondition(Process process, FlowElement source, FlowElement target, StageConfig targetConfig, FlowElement nextAfterTarget) {
+            ExclusiveGateway split = new ExclusiveGateway();
+            split.setId("entry_split_" + targetConfig.getStageCode());
+            process.addFlowElement(split);
+
+            ExclusiveGateway join = new ExclusiveGateway(); // Or simply connect to next?
+            // "Skip" means go to nextAfterTarget.
+            
+            // Connect Source -> Split
+            connect(process, source, split);
+            
+            // Split -> Target (Condition Met)
+            SequenceFlow enterFlow = connect(process, split, target);
+            enterFlow.setConditionExpression(targetConfig.getEntryCondition());
+            
+            // Split -> Skip (Default)
+            if (nextAfterTarget != null) {
+                 SequenceFlow skipFlow = connect(process, split, nextAfterTarget);
+                 split.setDefaultFlow(skipFlow.getId());
+            } else {
+                // Skip to End
+                EndEvent end = new EndEvent();
+                end.setId("end_skip_" + targetConfig.getStageCode());
+                process.addFlowElement(end);
+                SequenceFlow skipFlow = connect(process, split, end);
+                split.setDefaultFlow(skipFlow.getId());
+            }
     }
 
     private SequenceFlow connect(Process process, FlowElement source, FlowElement target) {

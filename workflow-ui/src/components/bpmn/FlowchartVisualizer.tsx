@@ -1,8 +1,6 @@
 
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import ReactFlow, {
-    Background,
-    Controls,
     useNodesState,
     useEdgesState,
     Position,
@@ -11,13 +9,14 @@ import ReactFlow, {
     type Edge,
     Panel,
     useReactFlow,
+    Background,
+    Controls,
     ReactFlowProvider
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
 import { Group, Tooltip, ActionIcon, SegmentedControl } from '@mantine/core';
 import { IconRefresh } from '@tabler/icons-react';
-import { useState } from 'react';
 import {
     BPMNStartNode,
     BPMNEndNode,
@@ -64,7 +63,7 @@ interface WorkflowMaster {
     slaDurationDays?: number;
 }
 
-interface BpmnVisualizerProps {
+interface FlowchartVisualizerProps {
     stages: StageConfig[];
     workflow: WorkflowMaster;
 }
@@ -74,7 +73,8 @@ const dagreGraph = new dagre.graphlib.Graph();
 dagreGraph.setDefaultEdgeLabel(() => ({}));
 
 const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
-    dagreGraph.setGraph({ rankdir: 'LR', ranksep: 120, nodesep: 80 }); // Left to Right with more spacing
+    // Top-to-Bottom Layout for "Tree/Flowchart" feel
+    dagreGraph.setGraph({ rankdir: 'TB', ranksep: 50, nodesep: 75 });
 
     nodes.forEach((node) => {
         // Approximate dimensions for layout
@@ -95,8 +95,8 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
 
     nodes.forEach((node) => {
         const nodeWithPosition = dagreGraph.node(node.id);
-        node.targetPosition = Position.Left;
-        node.sourcePosition = Position.Right;
+        node.targetPosition = Position.Top;
+        node.sourcePosition = Position.Bottom;
 
         // Shift slightly to center
         const w = (node.type === 'bpmnGateway' || node.type === 'bpmnStart' || node.type === 'bpmnEnd') ? 20 : 90;
@@ -115,6 +115,8 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
 const getConnectedNodes = (nodeId: string, _nodes: Node[], edges: Edge[]) => {
     const connected = new Set<string>();
     connected.add(nodeId);
+
+    // Direct neighbors only (Incoming and Outgoing)
     edges.forEach(edge => {
         if (edge.source === nodeId) connected.add(edge.target);
         if (edge.target === nodeId) connected.add(edge.source);
@@ -122,15 +124,15 @@ const getConnectedNodes = (nodeId: string, _nodes: Node[], edges: Edge[]) => {
     return connected;
 };
 
-export function BpmnVisualizer(props: BpmnVisualizerProps) {
+export function FlowchartVisualizer(props: FlowchartVisualizerProps) {
     return (
         <ReactFlowProvider>
-            <BpmnCanvas {...props} />
+            <FlowchartCanvas {...props} />
         </ReactFlowProvider>
     );
 }
 
-function BpmnCanvas({ stages, workflow }: BpmnVisualizerProps) {
+function FlowchartCanvas({ stages, workflow }: FlowchartVisualizerProps) {
     const [filterMode, setFilterMode] = useState<string>('ALL'); // ALL, RULES, ACTIONS
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const { fitView } = useReactFlow();
@@ -189,7 +191,7 @@ function BpmnCanvas({ stages, workflow }: BpmnVisualizerProps) {
 
                 edges.push(createEdge(previousNodeId, nodeId, undefined, '#555', 'SEQUENCE'));
 
-                // Routing Rules (Variable-based)
+                // Routing Logic
                 if (stage.routingRules) {
                     try {
                         const rules = JSON.parse(stage.routingRules);
@@ -221,7 +223,6 @@ function BpmnCanvas({ stages, workflow }: BpmnVisualizerProps) {
                     previousNodeId = nodeId;
                 }
 
-                // Action-based Routing
                 if (stage.actions) {
                     stage.actions.forEach(action => {
                         const color = getActionColor(action.buttonStyle);
@@ -355,6 +356,11 @@ function BpmnCanvas({ stages, workflow }: BpmnVisualizerProps) {
                         </Tooltip>
                     </Group>
                 </Panel>
+                <Panel position="top-left">
+                    <p style={{ margin: 0, fontSize: 12, color: '#888' }}>
+                        {selectedNodeId ? 'Focus Mode Active (Click BG to reset)' : 'Click node to focus path'}
+                    </p>
+                </Panel>
                 <Background color="#aaa" gap={16} />
                 <Controls />
             </ReactFlow>
@@ -406,7 +412,7 @@ function createEdge(source: string, target: string, label?: string, color: strin
         id: `e-${source}-${target}-${label || ''}`,
         source: source,
         target: target,
-        type: 'default', // Bezier for cleaner routing
+        type: 'default', // Bezier for visibility
         label: label,
         data: { type: type }, // Store type for filtering
         labelStyle: { fill: color, fontWeight: 700 },
@@ -416,6 +422,9 @@ function createEdge(source: string, target: string, label?: string, color: strin
             height: 20,
             color: color
         },
-        style: { strokeWidth: 2, stroke: color }
+        style: {
+            strokeWidth: 2,
+            stroke: color
+        }
     };
 }

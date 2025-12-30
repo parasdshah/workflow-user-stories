@@ -64,6 +64,9 @@ public class StageConfig {
     @Column(columnDefinition = "TEXT")
     private String entryCondition; // Expression to evaluate before entering stage
 
+    @Column(columnDefinition = "TEXT")
+    private String routingRules; // JSON Structure for branching logic
+
     public boolean isRuleStage() {
         return Boolean.TRUE.equals(this.isRuleStage);
     }
