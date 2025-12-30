@@ -72,7 +72,10 @@ export function BPMNUserTaskNode({ data }: NodeProps) {
                     </div>
                 )}
             </Paper>
-            <Handle type="source" position={Position.Right} />
+
+            <Handle type="source" position={Position.Right} id="right" />
+            <Handle type="source" position={Position.Top} id="top" style={{ top: 10, background: '#555' }} />
+            <Handle type="source" position={Position.Bottom} id="bottom" style={{ bottom: 10, background: '#555' }} />
         </>
     );
 }
@@ -93,7 +96,10 @@ export function BPMNServiceTaskNode({ data }: NodeProps) {
                     </div>
                 </Group>
             </Paper>
-            <Handle type="source" position={Position.Right} />
+
+            <Handle type="source" position={Position.Right} id="right" />
+            <Handle type="source" position={Position.Top} id="top" style={{ top: 10, background: '#555' }} />
+            <Handle type="source" position={Position.Bottom} id="bottom" style={{ bottom: 10, background: '#555' }} />
         </>
     );
 }
@@ -114,7 +120,10 @@ export function BPMNCallActivityNode({ data }: NodeProps) {
                     </div>
                 </Group>
             </Paper>
-            <Handle type="source" position={Position.Right} />
+
+            <Handle type="source" position={Position.Right} id="right" />
+            <Handle type="source" position={Position.Top} id="top" style={{ top: 10, background: '#555' }} />
+            <Handle type="source" position={Position.Bottom} id="bottom" style={{ bottom: 10, background: '#555' }} />
         </>
     );
 }
@@ -140,7 +149,9 @@ export function BPMNGatewayNode({ }: NodeProps) {
                 </div>
             </div>
             {/* We might need multiple source handles based on logic, but for simple visualization, Right is OK */}
-            <Handle type="source" position={Position.Right} />
+            <Handle type="source" position={Position.Right} id="right" />
+            <Handle type="source" position={Position.Top} id="top" />
+            <Handle type="source" position={Position.Bottom} id="bottom" />
         </>
     );
 }

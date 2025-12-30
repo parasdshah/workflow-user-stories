@@ -1,4 +1,4 @@
-import { Container, Title, Button, TextInput, Group, Stack, Paper, Select, NumberInput, Modal, Table, ActionIcon, SimpleGrid, Tabs, SegmentedControl, Text } from '@mantine/core';
+import { Container, Title, Button, TextInput, Group, Stack, Paper, Select, NumberInput, Modal, Table, ActionIcon, SimpleGrid, Tabs, SegmentedControl, Text, Code, Badge } from '@mantine/core';
 import { IconEdit, IconTrash, IconGitBranch, IconUser, IconSettings, IconGavel, IconArrowsSplit, IconSitemap } from '@tabler/icons-react';
 import { useForm } from '@mantine/form';
 import { useDisclosure } from '@mantine/hooks';
@@ -363,6 +363,18 @@ function WorkflowEditor() {
 
             <Modal opened={opened} onClose={close} title={editingIndex !== null ? "Edit Stage" : "Add Stage"} size="xl">
                 <form onSubmit={stageForm.onSubmit(handleStageSubmit)}>
+                    <Paper withBorder p="xs" mb="md" bg="gray.0">
+                        <Group justify="space-between">
+                            <div>
+                                <Text fw={700} size="lg">{stageForm.values.stageName || 'New Stage'}</Text>
+                                <Group gap="xs">
+                                    <Code>{stageForm.values.stageCode || 'NO_CODE'}</Code>
+                                    <Badge variant="outline">{stageForm.values.isRuleStage ? 'RULE' : 'USER'}</Badge>
+                                </Group>
+                            </div>
+                        </Group>
+                    </Paper>
+
                     <Tabs defaultValue="general">
                         <Tabs.List mb="md">
                             <Tabs.Tab value="general">General</Tabs.Tab>

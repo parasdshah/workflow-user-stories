@@ -158,6 +158,7 @@ function BpmnCanvas({ stages, workflow }: BpmnVisualizerProps) {
         });
 
         let previousNodeId = 'start';
+        let shouldConnectToNext = true;
 
         // Sort stages by sequence
         const sortedStages = [...stages].sort((a, b) => a.sequenceOrder - b.sequenceOrder);
@@ -181,13 +182,25 @@ function BpmnCanvas({ stages, workflow }: BpmnVisualizerProps) {
 
         groups.forEach((group) => {
             if (group.length === 1) {
-                // Single Stage
                 const stage = group[0];
                 const nodeId = stage.stageCode;
                 const node = createNode(stage, workflow);
                 nodes.push(node);
 
-                edges.push(createEdge(previousNodeId, nodeId, undefined, '#555', 'SEQUENCE'));
+                if (shouldConnectToNext) {
+                    edges.push(createEdge(previousNodeId, nodeId, undefined, '#555', 'SEQUENCE'));
+                }
+
+                // Determine if this stage terminates the default flow
+                let explicitlyTerminal = false;
+                if (stage.actions && stage.actions.length > 0) {
+                    // If all actions are SPECIFIC or END, and none are NEXT, we stop the sequence flow
+                    const hasNextAction = stage.actions.some(a => !a.targetType || a.targetType === 'NEXT');
+                    if (!hasNextAction) {
+                        explicitlyTerminal = true;
+                    }
+                }
+                shouldConnectToNext = !explicitlyTerminal;
 
                 // Routing Rules (Variable-based)
                 if (stage.routingRules) {
@@ -205,7 +218,7 @@ function BpmnCanvas({ stages, workflow }: BpmnVisualizerProps) {
 
                             rules.forEach((r: any) => {
                                 if (r.targetStageCode) {
-                                    edges.push(createEdge(gatewayId, r.targetStageCode, r.condition, '#555', 'RULE'));
+                                    edges.push(createEdge(gatewayId, r.targetStageCode, r.condition, '#555', 'RULE', 'top')); // Rules from TOP
                                 }
                             });
 
@@ -226,15 +239,18 @@ function BpmnCanvas({ stages, workflow }: BpmnVisualizerProps) {
                     stage.actions.forEach(action => {
                         const color = getActionColor(action.buttonStyle);
                         if (action.targetType === 'SPECIFIC' && action.targetStage) {
-                            edges.push(createEdge(nodeId, action.targetStage, action.actionLabel, color, 'ACTION'));
+                            edges.push(createEdge(nodeId, action.targetStage, action.actionLabel, color, 'ACTION', 'bottom')); // Actions from BOTTOM
                         } else if (action.targetType === 'END') {
-                            edges.push(createEdge(nodeId, 'end', action.actionLabel, color, 'ACTION'));
+                            edges.push(createEdge(nodeId, 'end', action.actionLabel, color, 'ACTION', 'bottom')); // Actions from BOTTOM
                         }
                     });
                 }
 
             } else {
                 // Parallel Split
+                // Parallel block always assumes flow continues after join
+                shouldConnectToNext = true;
+
                 const splitId = `split_${group[0].sequenceOrder}`;
                 nodes.push({
                     id: splitId,
@@ -263,9 +279,9 @@ function BpmnCanvas({ stages, workflow }: BpmnVisualizerProps) {
                         stage.actions.forEach(action => {
                             const color = getActionColor(action.buttonStyle);
                             if (action.targetType === 'SPECIFIC' && action.targetStage) {
-                                edges.push(createEdge(nodeId, action.targetStage, action.actionLabel, color, 'ACTION'));
+                                edges.push(createEdge(nodeId, action.targetStage, action.actionLabel, color, 'ACTION', 'bottom'));
                             } else if (action.targetType === 'END') {
-                                edges.push(createEdge(nodeId, 'end', action.actionLabel, color, 'ACTION'));
+                                edges.push(createEdge(nodeId, 'end', action.actionLabel, color, 'ACTION', 'bottom'));
                             }
                         });
                     }
@@ -283,7 +299,9 @@ function BpmnCanvas({ stages, workflow }: BpmnVisualizerProps) {
             position: { x: 0, y: 0 }
         });
 
-        edges.push(createEdge(previousNodeId, 'end', undefined, '#555', 'SEQUENCE'));
+        if (shouldConnectToNext) {
+            edges.push(createEdge(previousNodeId, 'end', undefined, '#555', 'SEQUENCE'));
+        }
 
         return { initialNodes: nodes, initialEdges: edges };
     }, [stages, workflow]);
@@ -301,13 +319,31 @@ function BpmnCanvas({ stages, workflow }: BpmnVisualizerProps) {
 
     // Filter Edges
     const visibleEdges = useMemo(() => {
-        if (filterMode === 'ALL') return edges;
-        return edges.filter(e => {
-            if (filterMode === 'RULES_ONLY') return e.data?.type === 'RULE' || e.data?.type === 'SEQUENCE'; // Keep structure
-            if (filterMode === 'ACTIONS_ONLY') return e.data?.type === 'ACTION' || e.data?.type === 'SEQUENCE';
-            return true;
-        });
-    }, [edges, filterMode]);
+        let filtered = edges;
+        if (filterMode === 'NONE') {
+            filtered = edges.filter(e => e.data?.type === 'SEQUENCE');
+        } else if (filterMode === 'RULES_ONLY') {
+            filtered = edges.filter(e => e.data?.type === 'RULE'); // Strict: hide sequence
+        } else if (filterMode === 'ACTIONS_ONLY') {
+            filtered = edges.filter(e => e.data?.type === 'ACTION');
+        }
+
+        // Apply Focus Blur to Edges
+        if (selectedNodeId) {
+            const connected = getConnectedNodes(selectedNodeId, nodes, edges);
+            return filtered.map(e => ({
+                ...e,
+                style: {
+                    ...e.style,
+                    opacity: (connected.has(e.source) && connected.has(e.target)) ? 1 : 0.1,
+                    strokeWidth: (connected.has(e.source) && connected.has(e.target)) ? 3 : 1
+                },
+                animated: (connected.has(e.source) && connected.has(e.target))
+            }));
+        }
+
+        return filtered;
+    }, [edges, filterMode, selectedNodeId, nodes]);
 
     // Blur Logic
     const DisplayNodes = useMemo(() => {
@@ -345,7 +381,8 @@ function BpmnCanvas({ stages, workflow }: BpmnVisualizerProps) {
                             data={[
                                 { label: 'All', value: 'ALL' },
                                 { label: 'Rules', value: 'RULES_ONLY' },
-                                { label: 'Actions', value: 'ACTIONS_ONLY' }
+                                { label: 'Actions', value: 'ACTIONS_ONLY' },
+                                { label: 'None', value: 'NONE' }
                             ]}
                         />
                         <Tooltip label="Reset Layout">
@@ -401,11 +438,12 @@ const getActionColor = (style: string) => {
     }
 };
 
-function createEdge(source: string, target: string, label?: string, color: string = '#555', type: string = 'SEQUENCE'): Edge {
+function createEdge(source: string, target: string, label?: string, color: string = '#555', type: string = 'SEQUENCE', sourceHandle?: string): Edge {
     return {
         id: `e-${source}-${target}-${label || ''}`,
         source: source,
         target: target,
+        sourceHandle: sourceHandle || undefined,
         type: 'default', // Bezier for cleaner routing
         label: label,
         data: { type: type }, // Store type for filtering

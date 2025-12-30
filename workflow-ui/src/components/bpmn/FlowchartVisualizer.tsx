@@ -160,6 +160,7 @@ function FlowchartCanvas({ stages, workflow }: FlowchartVisualizerProps) {
         });
 
         let previousNodeId = 'start';
+        let shouldConnectToNext = true;
 
         // Sort stages by sequence
         const sortedStages = [...stages].sort((a, b) => a.sequenceOrder - b.sequenceOrder);
@@ -183,13 +184,25 @@ function FlowchartCanvas({ stages, workflow }: FlowchartVisualizerProps) {
 
         groups.forEach((group) => {
             if (group.length === 1) {
-                // Single Stage
                 const stage = group[0];
                 const nodeId = stage.stageCode;
                 const node = createNode(stage, workflow);
                 nodes.push(node);
 
-                edges.push(createEdge(previousNodeId, nodeId, undefined, '#555', 'SEQUENCE'));
+                if (shouldConnectToNext) {
+                    edges.push(createEdge(previousNodeId, nodeId, undefined, '#555', 'SEQUENCE'));
+                }
+
+                // Determine if this stage terminates the default flow
+                let explicitlyTerminal = false;
+                if (stage.actions && stage.actions.length > 0) {
+                    // If all actions are SPECIFIC or END, and none are NEXT, we stop the sequence flow
+                    const hasNextAction = stage.actions.some(a => !a.targetType || a.targetType === 'NEXT');
+                    if (!hasNextAction) {
+                        explicitlyTerminal = true;
+                    }
+                }
+                shouldConnectToNext = !explicitlyTerminal;
 
                 // Routing Logic
                 if (stage.routingRules) {
@@ -207,6 +220,8 @@ function FlowchartCanvas({ stages, workflow }: FlowchartVisualizerProps) {
 
                             rules.forEach((r: any) => {
                                 if (r.targetStageCode) {
+                                    // Use 'right' handle for rules in Flowchart (TB) to distinguish from main flow?
+                                    // Or just default. Let's use default to avoid messy backward loops.
                                     edges.push(createEdge(gatewayId, r.targetStageCode, r.condition, '#555', 'RULE'));
                                 }
                             });
@@ -224,8 +239,12 @@ function FlowchartCanvas({ stages, workflow }: FlowchartVisualizerProps) {
                 }
 
                 if (stage.actions) {
-                    stage.actions.forEach(action => {
+                    stage.actions.forEach((action) => {
                         const color = getActionColor(action.buttonStyle);
+                        // Alternate handles or use specific ones?
+                        // For Flowchart (TB), sides might be better for branching?
+                        // Let's use 'right' or 'left' if available, but CustomNodes only added Top/Bottom/Right.
+                        // Let's stick to default for TB layout, user request likely for BPMN.
                         if (action.targetType === 'SPECIFIC' && action.targetStage) {
                             edges.push(createEdge(nodeId, action.targetStage, action.actionLabel, color, 'ACTION'));
                         } else if (action.targetType === 'END') {
@@ -236,6 +255,9 @@ function FlowchartCanvas({ stages, workflow }: FlowchartVisualizerProps) {
 
             } else {
                 // Parallel Split
+                // Parallel block always assumes flow continues after join
+                shouldConnectToNext = true;
+
                 const splitId = `split_${group[0].sequenceOrder}`;
                 nodes.push({
                     id: splitId,
@@ -284,7 +306,9 @@ function FlowchartCanvas({ stages, workflow }: FlowchartVisualizerProps) {
             position: { x: 0, y: 0 }
         });
 
-        edges.push(createEdge(previousNodeId, 'end', undefined, '#555', 'SEQUENCE'));
+        if (shouldConnectToNext) {
+            edges.push(createEdge(previousNodeId, 'end', undefined, '#555', 'SEQUENCE'));
+        }
 
         return { initialNodes: nodes, initialEdges: edges };
     }, [stages, workflow]);
@@ -302,22 +326,40 @@ function FlowchartCanvas({ stages, workflow }: FlowchartVisualizerProps) {
 
     // Filter Edges
     const visibleEdges = useMemo(() => {
-        if (filterMode === 'ALL') return edges;
-        return edges.filter(e => {
-            if (filterMode === 'RULES_ONLY') return e.data?.type === 'RULE' || e.data?.type === 'SEQUENCE'; // Keep structure
-            if (filterMode === 'ACTIONS_ONLY') return e.data?.type === 'ACTION' || e.data?.type === 'SEQUENCE';
-            return true;
-        });
-    }, [edges, filterMode]);
+        let filtered = edges;
+        if (filterMode === 'NONE') {
+            filtered = edges.filter(e => e.data?.type === 'SEQUENCE');
+        } else if (filterMode === 'RULES_ONLY') {
+            filtered = edges.filter(e => e.data?.type === 'RULE'); // Strict: hide sequence
+        } else if (filterMode === 'ACTIONS_ONLY') {
+            filtered = edges.filter(e => e.data?.type === 'ACTION'); // Strict: hide sequence
+        }
 
-    // Blur Logic
+        // Apply Focus Blur to Edges
+        if (selectedNodeId) {
+            const connected = getConnectedNodes(selectedNodeId, nodes, edges);
+            return filtered.map(e => ({
+                ...e,
+                style: {
+                    ...e.style,
+                    opacity: (connected.has(e.source) && connected.has(e.target)) ? 1 : 0.1,
+                    strokeWidth: (connected.has(e.source) && connected.has(e.target)) ? 3 : 1
+                },
+                animated: (connected.has(e.source) && connected.has(e.target))
+            }));
+        }
+
+        return filtered;
+    }, [edges, filterMode, selectedNodeId, nodes]);
+
+    // Blur Logic for Nodes
     const DisplayNodes = useMemo(() => {
         if (!selectedNodeId) return nodes; // No focus
 
         const connected = getConnectedNodes(selectedNodeId, nodes, edges);
         return nodes.map(node => {
             if (connected.has(node.id)) {
-                return { ...node, style: { ...node.style, opacity: 1 } };
+                return { ...node, style: { ...node.style, opacity: 1, fontWeight: 'bold' } };
             }
             return { ...node, style: { ...node.style, opacity: 0.1, transition: 'opacity 0.2s' } };
         });
@@ -346,7 +388,8 @@ function FlowchartCanvas({ stages, workflow }: FlowchartVisualizerProps) {
                             data={[
                                 { label: 'All', value: 'ALL' },
                                 { label: 'Rules', value: 'RULES_ONLY' },
-                                { label: 'Actions', value: 'ACTIONS_ONLY' }
+                                { label: 'Actions', value: 'ACTIONS_ONLY' },
+                                { label: 'None', value: 'NONE' }
                             ]}
                         />
                         <Tooltip label="Reset Layout">
