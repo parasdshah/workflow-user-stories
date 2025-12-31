@@ -1,5 +1,5 @@
 import { Container, Title, Button, TextInput, Group, Stack, Paper, Select, NumberInput, Modal, Table, ActionIcon, SimpleGrid, Tabs, SegmentedControl, Text, Code, Badge } from '@mantine/core';
-import { IconEdit, IconTrash, IconGitBranch, IconUser, IconSettings, IconGavel, IconArrowsSplit, IconSitemap } from '@tabler/icons-react';
+import { IconEdit, IconTrash, IconGitBranch, IconUser, IconSettings, IconGavel, IconArrowsSplit, IconSitemap, IconInfoCircle, IconBolt, IconPlug } from '@tabler/icons-react';
 import { useForm } from '@mantine/form';
 import { useDisclosure } from '@mantine/hooks';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -377,11 +377,11 @@ function WorkflowEditor() {
 
                     <Tabs defaultValue="general">
                         <Tabs.List mb="md">
-                            <Tabs.Tab value="general">General</Tabs.Tab>
-                            <Tabs.Tab value="config">Configuration</Tabs.Tab>
-                            <Tabs.Tab value="actions">Actions</Tabs.Tab>
-                            <Tabs.Tab value="routing">Routing/Branching</Tabs.Tab>
-                            <Tabs.Tab value="hooks">Hooks</Tabs.Tab>
+                            <Tabs.Tab value="general" leftSection={<IconInfoCircle size={14} />}>General</Tabs.Tab>
+                            <Tabs.Tab value="config" leftSection={<IconSettings size={14} />}>Configuration</Tabs.Tab>
+                            <Tabs.Tab value="actions" leftSection={<IconBolt size={14} />}>Actions</Tabs.Tab>
+                            <Tabs.Tab value="routing" leftSection={<IconArrowsSplit size={14} />}>Routing/Branching</Tabs.Tab>
+                            <Tabs.Tab value="hooks" leftSection={<IconPlug size={14} />}>Hooks</Tabs.Tab>
                         </Tabs.List>
 
                         <Tabs.Panel value="general">
@@ -394,15 +394,6 @@ function WorkflowEditor() {
 
 
 
-                                <Paper withBorder p="xs" bg="gray.0">
-                                    <Title order={6} mb="xs">Execution Mode</Title>
-                                    <TextInput
-                                        label="Parallel Group ID"
-                                        placeholder="e.g. GRP_APPROVAL"
-                                        description="Stages with same Sequence & Group ID will run in parallel"
-                                        {...stageForm.getInputProps('parallelGrouping')}
-                                    />
-                                </Paper>
                             </Stack>
                         </Tabs.Panel>
 
@@ -456,6 +447,16 @@ function WorkflowEditor() {
                                         placeholder="${amount > 1000}"
                                         description="Full UEL Expression required. E.g. ${creditScore <= 500}. Wraps the entire condition."
                                         {...stageForm.getInputProps('entryCondition')}
+                                    />
+                                </Paper>
+
+                                <Paper withBorder p="xs" mt="sm" bg="gray.0">
+                                    <Title order={6} mb="xs">Execution Mode</Title>
+                                    <TextInput
+                                        label="Parallel Group ID"
+                                        placeholder="e.g. GRP_APPROVAL"
+                                        description="Stages with same Sequence & Group ID will run in parallel"
+                                        {...stageForm.getInputProps('parallelGrouping')}
                                     />
                                 </Paper>
                             </Stack>
