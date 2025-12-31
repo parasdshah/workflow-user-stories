@@ -28,9 +28,9 @@ public class WorkflowExportImportService {
     private final SecurityUtils securityUtils;
     private final ObjectMapper objectMapper;
 
-    public byte[] exportWorkflow(String workflowCode) {
+    public byte[] exportWorkflow(String workflowCode, boolean encrypted) {
         try {
-            log.info("Exporting workflow: {}", workflowCode);
+            log.info("Exporting workflow: {} (Encrypted: {})", workflowCode, encrypted);
             Optional<WorkflowMaster> workflowOpt = workflowRepository.findByWorkflowCode(workflowCode);
             if (workflowOpt.isEmpty()) {
                 throw new RuntimeException("Workflow not found: " + workflowCode);
@@ -44,9 +44,13 @@ public class WorkflowExportImportService {
                     .build();
 
             String json = objectMapper.writeValueAsString(exportDto);
-            String encrypted = securityUtils.encrypt(json);
-
-            return encrypted.getBytes(StandardCharsets.UTF_8);
+            
+            if (encrypted) {
+                String encryptedContent = securityUtils.encrypt(json);
+                return encryptedContent.getBytes(StandardCharsets.UTF_8);
+            } else {
+                return json.getBytes(StandardCharsets.UTF_8);
+            }
 
         } catch (Exception e) {
             log.error("Error exporting workflow", e);
@@ -57,9 +61,29 @@ public class WorkflowExportImportService {
     @Transactional
     public void importWorkflow(MultipartFile file) {
         try {
-            log.info("Importing workflow from file: {}", file.getOriginalFilename());
-            String encryptedContent = new String(file.getBytes(), StandardCharsets.UTF_8);
-            String json = securityUtils.decrypt(encryptedContent);
+            String filename = file.getOriginalFilename();
+            log.info("Importing workflow from file: {}", filename);
+            String content = new String(file.getBytes(), StandardCharsets.UTF_8);
+            String json;
+
+            // Simple Heuristic: If it ends in .json OR starts with '{', assume JSON. 
+            // Otherwise, assume Encrypted.
+            boolean isJson = (filename != null && filename.endsWith(".json")) || content.trim().startsWith("{");
+
+            if (isJson) {
+                json = content;
+            } else {
+                try {
+                    json = securityUtils.decrypt(content);
+                } catch (Exception e) {
+                    // Fallback: If decryption fails, maybe it IS json but named oddly?
+                    if (content.trim().startsWith("{")) {
+                        json = content;
+                    } else {
+                        throw new RuntimeException("Decryption failed and content does not appear to be JSON");
+                    }
+                }
+            }
 
             WorkflowExportDto dto = objectMapper.readValue(json, WorkflowExportDto.class);
             WorkflowMaster importedWf = dto.getWorkflow();

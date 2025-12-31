@@ -18,15 +18,21 @@ public class WorkflowExportImportController {
     private final WorkflowExportImportService exportImportService;
 
     @GetMapping("/export/{workflowCode}")
-    public ResponseEntity<byte[]> exportWorkflow(@PathVariable String workflowCode) {
-        log.info("Request to export workflow: {}", workflowCode);
-        byte[] fileContent = exportImportService.exportWorkflow(workflowCode);
+    public ResponseEntity<byte[]> exportWorkflow(@PathVariable String workflowCode, 
+                                                 @RequestParam(defaultValue = "encrypted") String format) {
+        log.info("Request to export workflow: {}, format: {}", workflowCode, format);
         
-        String filename = "workflow_" + workflowCode + "_" + System.currentTimeMillis() + ".enc";
+        boolean isEncrypted = !"json".equalsIgnoreCase(format);
+        byte[] fileContent = exportImportService.exportWorkflow(workflowCode, isEncrypted);
+        
+        String ext = isEncrypted ? ".enc" : ".json";
+        String filename = "workflow_" + workflowCode + "_" + System.currentTimeMillis() + ext;
+
+        MediaType mediaType = isEncrypted ? MediaType.APPLICATION_OCTET_STREAM : MediaType.APPLICATION_JSON;
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentType(mediaType)
                 .body(fileContent);
     }
 

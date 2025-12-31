@@ -16,8 +16,9 @@ Enable users to export a full workflow configuration (including stages, actions,
         - All Stage Configurations (Sequence, Type, Hooks, Parallel Grouping)
         - All Rules (Routing, Entry Conditions)
         - All Actions (Labels, Styles, Targets)
-    - [ ] **Encryption**: The file content is encrypted using AES-256 (or similar) with a system-defined key to prevent tampering.
-    - [ ] The file is downloaded to the user's browser (e.g., `workflow_CODE_timestamp.enc`).
+    - [ ] **Options**: Encrypted (Default) or Plain JSON.
+    - [ ] **Encryption**: If Encrypted, use AES-256. If Plain, just JSON.
+    - [ ] The file is downloaded as `.enc` or `.json`.
 
 ### Story 2: Import Workflow
 **As a** Workflow Admin
@@ -26,8 +27,9 @@ Enable users to export a full workflow configuration (including stages, actions,
 - **Acceptance Criteria**:
     - [ ] A dedicated "Import" button exists on the Workflow List.
     - [ ] Clicking "Import" opens a file upload modal.
-    - [ ] User selects a `.enc` file.
-    - [ ] System decrypts the file.
+    - [ ] User selects a `.enc` OR `.json` file.
+    - [ ] System detects format.
+    - [ ] System decrypts if `.enc`, or parses if `.json`.
     - [ ] **Validation**: System validates the structure.
     - [ ] **Conflict Handling**: If a workflow with the same code exists:
         - Ask user to "Overwrite" or "Create Copy" (or just fail/warn). *MVP: Overwrite or Fail.*

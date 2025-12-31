@@ -1,5 +1,5 @@
-import { Container, Title, Button, Group, Table, Badge, Indicator, ActionIcon, FileButton, Tooltip } from '@mantine/core';
-import { IconPlus, IconPlayerPlay, IconDownload, IconUpload } from '@tabler/icons-react';
+import { Container, Title, Button, Group, Table, Badge, Indicator, ActionIcon, FileButton, Menu } from '@mantine/core';
+import { IconPlus, IconPlayerPlay, IconDownload, IconUpload, IconFileText, IconLock } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { StartCaseModal } from '../components/cases/StartCaseModal';
@@ -40,15 +40,16 @@ function WorkflowList() {
 
 
 
-    const handleExport = async (code: string) => {
+    const handleExport = async (code: string, format: 'encrypted' | 'json') => {
         try {
-            const res = await fetch(`/api/workflow/export/${code}`);
+            const res = await fetch(`/api/workflow/export/${code}?format=${format}`);
             if (!res.ok) throw new Error("Export failed");
             const blob = await res.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `workflow_${code}_${Date.now()}.enc`;
+            const ext = format === 'encrypted' ? '.enc' : '.json';
+            a.download = `workflow_${code}_${Date.now()}${ext}`;
             document.body.appendChild(a);
             a.click();
             a.remove();
@@ -82,7 +83,7 @@ function WorkflowList() {
             <Group justify="space-between" mb="lg">
                 <Title order={2}>Workflows</Title>
                 <Group>
-                    <FileButton onChange={handleImport} accept=".enc">
+                    <FileButton onChange={handleImport} accept=".enc,.json">
                         {(props) => <Button {...props} leftSection={<IconUpload size={16} />} variant="default">Import Workflow</Button>}
                     </FileButton>
                     <Button leftSection={<IconPlus size={16} />} onClick={() => navigate('/create')}>Create Workflow</Button>
@@ -123,11 +124,22 @@ function WorkflowList() {
                             <Table.Td>
                                 <Group gap="xs">
                                     <Button variant="subtle" size="xs" onClick={() => navigate(`/edit/${wf.workflowCode}`)}>Edit</Button>
-                                    <Tooltip label="Export Configuration">
-                                        <ActionIcon variant="light" color="gray" onClick={() => handleExport(wf.workflowCode)}>
-                                            <IconDownload size={16} />
-                                        </ActionIcon>
-                                    </Tooltip>
+                                    <Menu shadow="md" width={200}>
+                                        <Menu.Target>
+                                            <ActionIcon variant="light" color="gray" title="Export Configuration">
+                                                <IconDownload size={16} />
+                                            </ActionIcon>
+                                        </Menu.Target>
+                                        <Menu.Dropdown>
+                                            <Menu.Label>Export Format</Menu.Label>
+                                            <Menu.Item leftSection={<IconLock size={14} />} onClick={() => handleExport(wf.workflowCode, 'encrypted')}>
+                                                Encrypted (.enc)
+                                            </Menu.Item>
+                                            <Menu.Item leftSection={<IconFileText size={14} />} onClick={() => handleExport(wf.workflowCode, 'json')}>
+                                                Plain JSON (.json)
+                                            </Menu.Item>
+                                        </Menu.Dropdown>
+                                    </Menu>
                                     <Button variant="light" size="xs" onClick={() => navigate(`/preview/${wf.workflowCode}`)}>Preview/Deploy</Button>
                                     <Button
                                         variant="filled"
