@@ -1,5 +1,5 @@
-import { Container, Title, Button, Group, Table, Badge, Indicator } from '@mantine/core';
-import { IconPlus, IconPlayerPlay } from '@tabler/icons-react';
+import { Container, Title, Button, Group, Table, Badge, Indicator, ActionIcon, FileButton, Tooltip } from '@mantine/core';
+import { IconPlus, IconPlayerPlay, IconDownload, IconUpload } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { StartCaseModal } from '../components/cases/StartCaseModal';
@@ -39,12 +39,54 @@ function WorkflowList() {
 
 
 
+
+    const handleExport = async (code: string) => {
+        try {
+            const res = await fetch(`/api/workflow/export/${code}`);
+            if (!res.ok) throw new Error("Export failed");
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `workflow_${code}_${Date.now()}.enc`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        } catch (e) {
+            console.error(e);
+            alert('Export Failed');
+        }
+    };
+
+    const handleImport = async (file: File | null) => {
+        if (!file) return;
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const res = await fetch('/api/workflow/import', { method: 'POST', body: formData });
+            if (!res.ok) {
+                const errorMsg = await res.text();
+                throw new Error(errorMsg || "Import failed");
+            }
+            alert('Import Successful');
+            window.location.reload();
+        } catch (e: any) {
+            console.error(e);
+            alert(`Import Failed: ${e.message}`);
+        }
+    };
+
     return (
         <Container size="xl" py="xl">
 
             <Group justify="space-between" mb="lg">
                 <Title order={2}>Workflows</Title>
-                <Button leftSection={<IconPlus size={16} />} onClick={() => navigate('/create')}>Create Workflow</Button>
+                <Group>
+                    <FileButton onChange={handleImport} accept=".enc">
+                        {(props) => <Button {...props} leftSection={<IconUpload size={16} />} variant="default">Import Workflow</Button>}
+                    </FileButton>
+                    <Button leftSection={<IconPlus size={16} />} onClick={() => navigate('/create')}>Create Workflow</Button>
+                </Group>
             </Group>
 
             <Table>
@@ -81,6 +123,11 @@ function WorkflowList() {
                             <Table.Td>
                                 <Group gap="xs">
                                     <Button variant="subtle" size="xs" onClick={() => navigate(`/edit/${wf.workflowCode}`)}>Edit</Button>
+                                    <Tooltip label="Export Configuration">
+                                        <ActionIcon variant="light" color="gray" onClick={() => handleExport(wf.workflowCode)}>
+                                            <IconDownload size={16} />
+                                        </ActionIcon>
+                                    </Tooltip>
                                     <Button variant="light" size="xs" onClick={() => navigate(`/preview/${wf.workflowCode}`)}>Preview/Deploy</Button>
                                     <Button
                                         variant="filled"
