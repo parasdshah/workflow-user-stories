@@ -140,7 +140,7 @@ export default function CaseView() {
                         <Title order={5} mb="sm">Process Variables</Title>
                         <Accordion variant="separated">
                             <Accordion.Item value="json">
-                                <Accordion.Control>View JSON Data</Accordion.Control>
+                                <Accordion.Control value="always-open-item">View JSON Data</Accordion.Control>
                                 <Accordion.Panel>
                                     <Code block style={{ whiteSpace: 'pre-wrap', maxHeight: '300px', overflowY: 'auto' }}>
                                         {JSON.stringify(caseDetails.processVariables || {}, null, 2)}
