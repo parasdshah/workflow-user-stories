@@ -74,37 +74,25 @@ public class DeploymentService {
         if (pd != null) {
             String workflowCode = pd.getKey();
 
-            // 2. Mark as DELETED in DB
-            workflowDefinitionService.markWorkflowAsDeleted(workflowCode);
+            // Check if this is the latest version
+            org.flowable.engine.repository.ProcessDefinition latest = repositoryService.createProcessDefinitionQuery()
+                    .processDefinitionKey(workflowCode)
+                    .latestVersion()
+                    .singleResult();
 
-            // 3. Suspend Process Definition to prevent new instances
-            // We do NOT cascade delete history.
-            repositoryService.suspendProcessDefinitionByKey(workflowCode, true, null); // Suspend process instances too?
-                                                                                       // User said 'history lost', so
-                                                                                       // maybe keep instances active?
-            // "Undeploy" usually means "stop allowing new ones".
-            // If we suspend process instances, active ones stop.
-            // Let's just suspend the DEFINITION.
-            // repositoryService.suspendProcessDefinitionById(pd.getId()); // This suspends
-            // specific version
-            // Or suspend by Key (all versions).
-            // Better to just update DB status so UI hides it.
-            // User requirement: "all cases from task history are lost. I dont want that".
-            // If I deleteDeployment(cascade=true), everything is gone.
-            // If I deleteDeployment(cascade=false), history remains but definition is gone
-            // from engine (so no new starts).
-            // User asked for "mark as soft delete".
-            // So I will Just update DB.
-            // But if I don't delete deployment, it's still "Deployed" in Flowable terms.
-            // I will suspend it so it can't be started.
-            try {
-                repositoryService.suspendProcessDefinitionByKey(workflowCode);
-            } catch (Exception e) {
-                // Ignore if already suspended or not found
+            boolean isLatest = latest != null && latest.getId().equals(pd.getId());
+
+            if (isLatest) {
+                // If it's the latest version, we suspend the Key to stop new instances.
+                // We do NOT mark as DELETED in DB here (that's for Delete Workflow).
+                log.info("Suspending latest version (Key: {})", workflowCode);
+                repositoryService.suspendProcessDefinitionByKey(workflowCode, true, null);
+            } else {
+                // If it's an old version, we suspend just this version ID.
+                log.info("Suspending old version (ID: {})", pd.getId());
+                repositoryService.suspendProcessDefinitionById(pd.getId(), true, null);
             }
         }
-
-        // DO NOT call deleteDeployment
     }
 
     @Transactional

@@ -18,7 +18,6 @@ import java.util.List;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import java.util.Map;
-import java.util.Collections;
 
 @Service
 @RequiredArgsConstructor
@@ -91,8 +90,9 @@ public class BpmnGeneratorService {
             FlowElement source = currentElement;
             FlowElement defaultTarget = getNextStageElement(stages, i, stageElements);
 
-            // A. Routing Rules (Branching)
-            if (currentStage.getRoutingRules() != null && !currentStage.getRoutingRules().isBlank()) {
+            // A. Routing Rules (Branching) or Actions (User Decisions)
+            if ((currentStage.getRoutingRules() != null && !currentStage.getRoutingRules().isBlank())
+                    || (currentStage.getActions() != null && !currentStage.getActions().isEmpty())) {
                 // Add Exclusive Gateway for Branching
                 ExclusiveGateway gateway = new ExclusiveGateway();
                 gateway.setId("gateway_split_" + currentStage.getStageCode());
@@ -101,47 +101,71 @@ public class BpmnGeneratorService {
                 // Connect Stage -> Gateway
                 connect(process, source, gateway);
 
-                try {
-                    List<Map<String, String>> rules = objectMapper.readValue(currentStage.getRoutingRules(),
-                            new TypeReference<List<Map<String, String>>>() {
-                            });
-                    boolean hasDefault = false;
+                // 1. Process Routing Rules (Data-driven)
+                if (currentStage.getRoutingRules() != null && !currentStage.getRoutingRules().isBlank()) {
+                    try {
+                        List<Map<String, String>> rules = objectMapper.readValue(currentStage.getRoutingRules(),
+                                new TypeReference<List<Map<String, String>>>() {
+                                });
 
-                    for (Map<String, String> rule : rules) {
-                        String condition = rule.get("condition");
-                        String targetCode = rule.get("targetStageCode");
-                        FlowElement targetEl = stageElements.get(targetCode);
+                        for (Map<String, String> rule : rules) {
+                            String condition = rule.get("condition");
+                            String targetCode = rule.get("targetStageCode");
+                            FlowElement targetEl = stageElements.get(targetCode);
+
+                            if (targetEl != null) {
+                                SequenceFlow flow = connect(process, gateway, targetEl);
+                                if (condition != null && !condition.isBlank()) {
+                                    flow.setConditionExpression(condition);
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.error("Failed to parse routing rules for stage " + currentStage.getStageCode(), e);
+                    }
+                }
+
+                // 2. Process Actions (User-driven)
+                if (currentStage.getActions() != null) {
+                    for (com.workflow.service.entity.StageAction action : currentStage.getActions()) {
+                        String condition = "${outcome == '" + action.getActionLabel() + "'}"; // Match frontend
+                                                                                              // "outcome" variable
+                        FlowElement targetEl = null;
+
+                        if ("SPECIFIC".equalsIgnoreCase(action.getTargetType())) {
+                            targetEl = stageElements.get(action.getTargetStage());
+                        } else if ("END".equalsIgnoreCase(action.getTargetType())) {
+                            // Route to End
+                        } else {
+                            // NEXT (Default)
+                            targetEl = defaultTarget;
+                        }
 
                         if (targetEl != null) {
                             SequenceFlow flow = connect(process, gateway, targetEl);
-                            if (condition != null && !condition.isBlank()) {
-                                flow.setConditionExpression(condition);
-                            } else {
-                                // Empty condition might imply default flow in UI config?
-                                // Or we treat it as specific "Always" path?
-                                // Standard: Condition required.
-                            }
+                            flow.setConditionExpression(condition);
+                        } else if ("END".equalsIgnoreCase(action.getTargetType())) {
+                            EndEvent end = new EndEvent();
+                            end.setId("end_" + currentStage.getStageCode() + "_"
+                                    + action.getActionLabel().replaceAll("[^a-zA-Z0-9]", ""));
+                            process.addFlowElement(end);
+                            SequenceFlow flow = connect(process, gateway, end);
+                            flow.setConditionExpression(condition);
                         }
                     }
+                }
 
-                    // Default Flow (if no condition met) -> Next Sequential Stage
-                    if (defaultTarget != null) {
-                        SequenceFlow defFlow = connect(process, gateway, defaultTarget);
-                        gateway.setDefaultFlow(defFlow.getId());
-                    } else {
-                        // End of workflow
-                        EndEvent end = new EndEvent();
-                        end.setId("end_" + currentStage.getStageCode());
-                        process.addFlowElement(end);
-                        SequenceFlow defFlow = connect(process, gateway, end);
-                        gateway.setDefaultFlow(defFlow.getId());
-                    }
-
-                } catch (Exception e) {
-                    log.error("Failed to parse routing rules for stage " + currentStage.getStageCode(), e);
-                    // Fallback to strict sequence
-                    if (defaultTarget != null)
-                        connect(process, source, defaultTarget);
+                // Default Flow (if no condition met) -> Next Sequential Stage
+                if (defaultTarget != null) {
+                    SequenceFlow defFlow = connect(process, gateway, defaultTarget);
+                    gateway.setDefaultFlow(defFlow.getId());
+                } else {
+                    // End of workflow
+                    EndEvent end = new EndEvent();
+                    end.setId("end_" + currentStage.getStageCode());
+                    process.addFlowElement(end);
+                    SequenceFlow defFlow = connect(process, gateway, end);
+                    gateway.setDefaultFlow(defFlow.getId());
                 }
 
             } else {
