@@ -20,8 +20,11 @@ public class CaseController {
     private final CaseService caseService;
 
     @GetMapping
-    public ResponseEntity<List<CaseDTO>> getAllActiveCases() {
-        return ResponseEntity.ok(caseService.getAllActiveCases());
+    public ResponseEntity<List<CaseDTO>> getAllActiveCases(
+            @RequestParam(required = false) String workflowCode,
+            @RequestParam(required = false) String initiator,
+            @RequestParam(required = false) String cpId) {
+        return ResponseEntity.ok(caseService.getAllActiveCases(workflowCode, initiator, cpId));
     }
 
     @PostMapping
@@ -55,8 +58,11 @@ public class CaseController {
     }
 
     @GetMapping("/tasks/history")
-    public ResponseEntity<List<StageDTO>> getUserTaskHistory(@RequestParam String userId) {
-        return ResponseEntity.ok(caseService.getUserTaskHistory(userId));
+    public ResponseEntity<List<StageDTO>> getUserTaskHistory(
+            @RequestParam String userId,
+            @RequestParam(required = false) String workflowCode,
+            @RequestParam(required = false) String cpId) {
+        return ResponseEntity.ok(caseService.getUserTaskHistory(userId, workflowCode, cpId));
     }
 
     @PostMapping("/{caseId}/tasks/{taskId}/complete")
