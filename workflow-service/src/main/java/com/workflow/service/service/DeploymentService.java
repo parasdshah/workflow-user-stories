@@ -43,17 +43,39 @@ public class DeploymentService {
         return deployment;
     }
 
-    public List<Deployment> getDeploymentHistory(String workflowCode) {
+    public List<com.workflow.service.dto.DeploymentHistoryDTO> getDeploymentHistory(String workflowCode) {
         // J.8 View deployment history
+        List<Deployment> deployments;
         if (workflowCode == null || workflowCode.isEmpty()) {
-            return repositoryService.createDeploymentQuery()
+            deployments = repositoryService.createDeploymentQuery()
+                    .orderByDeploymentTime().desc()
+                    .list();
+        } else {
+            deployments = repositoryService.createDeploymentQuery()
+                    .deploymentKey(workflowCode)
                     .orderByDeploymentTime().desc()
                     .list();
         }
-        return repositoryService.createDeploymentQuery()
-                .deploymentKey(workflowCode)
-                .orderByDeploymentTime().desc()
-                .list();
+
+        return deployments.stream().map(d -> {
+            String status = "ACTIVE";
+            org.flowable.engine.repository.ProcessDefinition pd = repositoryService.createProcessDefinitionQuery()
+                    .deploymentId(d.getId())
+                    .singleResult();
+            if (pd != null && pd.isSuspended()) {
+                status = "SUSPENDED";
+            }
+            // If PD is null, it might be a purely resource deployment or something went
+            // wrong, but "ACTIVE" or "UNKNOWN"
+            // We'll assume ACTIVE or maybe UNKNOWN. Let's stick to ACTIVE unless suspended.
+
+            return com.workflow.service.dto.DeploymentHistoryDTO.builder()
+                    .id(d.getId())
+                    .name(d.getName())
+                    .deploymentTime(d.getDeploymentTime())
+                    .status(status)
+                    .build();
+        }).collect(java.util.stream.Collectors.toList());
     }
 
     // Support J.2 Rollback by redeploying old XML or reverting pointer (Flowable

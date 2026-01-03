@@ -39,13 +39,10 @@ public class DeploymentController {
     }
 
     @GetMapping
-    public ResponseEntity<List<DeploymentDto>> getHistory(@RequestParam(required = false) String workflowCode) {
+    public ResponseEntity<List<com.workflow.service.dto.DeploymentHistoryDTO>> getHistory(
+            @RequestParam(required = false) String workflowCode) {
         // J.8 View deployment history
-        List<Deployment> deployments = deploymentService.getDeploymentHistory(workflowCode);
-        List<DeploymentDto> dtos = deployments.stream()
-                .map(d -> new DeploymentDto(d.getId(), d.getName(), d.getDeploymentTime()))
-                .collect(Collectors.toList());
-        return ResponseEntity.ok(dtos);
+        return ResponseEntity.ok(deploymentService.getDeploymentHistory(workflowCode));
     }
 
     @DeleteMapping("/{id}")
@@ -68,7 +65,4 @@ public class DeploymentController {
         }
     }
 
-    // Simple DTO
-    record DeploymentDto(String id, String name, java.util.Date deploymentTime) {
-    }
 }

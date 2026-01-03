@@ -7,6 +7,7 @@ interface DeploymentDto {
     id: string;
     name: string;
     deploymentTime: string;
+    status: string; // ACTIVE, SUSPENDED
 }
 
 function DeploymentHistory() {
@@ -88,27 +89,44 @@ function DeploymentHistory() {
                     </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                    {deployments.map((d) => (
-                        <Table.Tr key={d.id}>
-                            <Table.Td>{d.id}</Table.Td>
-                            <Table.Td>{d.name}</Table.Td>
-                            <Table.Td>{new Date(d.deploymentTime).toLocaleString()}</Table.Td>
-                            <Table.Td><Badge color="green">Deployed</Badge></Table.Td>
-                            <Table.Td>
-                                <Group gap="xs">
-                                    <ActionIcon color="blue" variant="light" onClick={() => handleRollbackClick(d)} title="Rollback">
-                                        <IconRotateClockwise size={16} />
-                                    </ActionIcon>
-                                    <ActionIcon color="red" variant="light" onClick={() => handleUndeployClick(d)} title="Undeploy">
-                                        <IconTrash size={16} />
-                                    </ActionIcon>
-                                </Group>
-                            </Table.Td>
-                        </Table.Tr>
-                    ))}
+                    {deployments.map((d) => {
+                        const isSuspended = d.status === 'SUSPENDED';
+                        return (
+                            <Table.Tr key={d.id} style={{ opacity: isSuspended ? 0.6 : 1, backgroundColor: isSuspended ? '#f8f9fa' : undefined }}>
+                                <Table.Td>{d.id}</Table.Td>
+                                <Table.Td>{d.name}</Table.Td>
+                                <Table.Td>{new Date(d.deploymentTime).toLocaleString()}</Table.Td>
+                                <Table.Td>
+                                    <Badge color={isSuspended ? 'gray' : 'green'}>{isSuspended ? 'Undeployed' : 'Deployed'}</Badge>
+                                </Table.Td>
+                                <Table.Td>
+                                    <Group gap="xs">
+                                        <ActionIcon
+                                            color="blue"
+                                            variant="light"
+                                            onClick={() => handleRollbackClick(d)}
+                                            title="Rollback"
+                                            disabled={isSuspended}
+                                        >
+                                            <IconRotateClockwise size={16} />
+                                        </ActionIcon>
+                                        <ActionIcon
+                                            color="red"
+                                            variant="light"
+                                            onClick={() => handleUndeployClick(d)}
+                                            title="Undeploy"
+                                            disabled={isSuspended}
+                                        >
+                                            <IconTrash size={16} />
+                                        </ActionIcon>
+                                    </Group>
+                                </Table.Td>
+                            </Table.Tr>
+                        );
+                    })}
                     {deployments.length === 0 && (
                         <Table.Tr>
-                            <Table.Td colSpan={4} align="center"><Text c="dimmed">No deployments found.</Text></Table.Td>
+                            <Table.Td colSpan={5} align="center"><Text c="dimmed">No deployments found.</Text></Table.Td>
                         </Table.Tr>
                     )}
                 </Table.Tbody>
