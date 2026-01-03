@@ -1,4 +1,4 @@
-import { Timeline, Text, Badge, Card, Button, Group, Collapse, Loader } from '@mantine/core';
+import { Timeline, Text, Badge, Card, Button, Group, Collapse, Loader, Modal, JsonInput } from '@mantine/core';
 import { IconCheck, IconCircleDashed, IconPlayerPlay, IconX, IconChevronDown, IconChevronRight } from '@tabler/icons-react';
 import { useState, useEffect } from 'react';
 
@@ -61,7 +61,7 @@ function NestedTimeline({ caseId }: { caseId: string }) {
 
 interface CaseTimelineProps {
     stages: StageDTO[];
-    onAction?: (taskId: string, outcome?: string) => void;
+    onAction?: (taskId: string, outcome?: string, variablesJson?: string) => void;
 }
 
 export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
@@ -90,6 +90,26 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
             ...prev,
             [processId]: !prev[processId]
         }));
+    };
+
+
+    const [modalOpen, setModalOpen] = useState(false);
+    const [jsonInput, setJsonInput] = useState('{}');
+    const [pendingAction, setPendingAction] = useState<{ taskId: string, outcome?: string } | null>(null);
+
+    const initiateAction = (taskId: string, outcome?: string) => {
+        // Open confirmation modal with JSON input
+        setPendingAction({ taskId, outcome });
+        setJsonInput('{\n  \n}');
+        setModalOpen(true);
+    };
+
+    const confirmAction = () => {
+        if (pendingAction && onAction) {
+            onAction(pendingAction.taskId, pendingAction.outcome, jsonInput);
+        }
+        setModalOpen(false);
+        setPendingAction(null);
     };
 
     return (
@@ -193,7 +213,8 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
                                                             size="xs"
                                                             variant={actionStyle === 'default' ? 'default' : 'outline'}
                                                             color={actionStyle === 'default' ? undefined : color}
-                                                            onClick={() => onAction(stage.taskId!, value)}
+
+                                                            onClick={() => initiateAction(stage.taskId!, value)}
                                                         >
                                                             {label}
                                                         </Button>
@@ -207,14 +228,15 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
                                                         size="xs"
                                                         variant="outline"
                                                         color={action.trim() === 'REJECT' ? 'red' : 'blue'}
-                                                        onClick={() => onAction(stage.taskId!, action.trim())}
+
+                                                        onClick={() => initiateAction(stage.taskId!, action.trim())}
                                                     >
                                                         {action.trim()}
                                                     </Button>
                                                 ));
                                             }
                                         })() : (
-                                            <Button size="xs" variant="outline" onClick={() => onAction(stage.taskId!)}>
+                                            <Button size="xs" variant="outline" onClick={() => initiateAction(stage.taskId!)}>
                                                 Complete
                                             </Button>
                                         )}
@@ -246,6 +268,24 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
                     </Timeline.Item>
                 ))}
             </Timeline>
-        </Card>
+
+            <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title="Confirm Action">
+                <Text size="sm" mb="sm">Provide any process variables (JSON) for this action:</Text>
+                <JsonInput
+                    label="Process Variables"
+                    placeholder="{ 'amount': 5000 }"
+                    validationError="Invalid JSON"
+                    formatOnBlur
+                    autosize
+                    minRows={4}
+                    value={jsonInput}
+                    onChange={setJsonInput}
+                />
+                <Group justify="end" mt="md">
+                    <Button variant="default" onClick={() => setModalOpen(false)}>Cancel</Button>
+                    <Button onClick={confirmAction}>Confirm</Button>
+                </Group>
+            </Modal>
+        </Card >
     );
 }

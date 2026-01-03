@@ -70,6 +70,16 @@ public class WorkflowController {
         return ResponseEntity.ok(workflowService.getStages(code));
     }
 
+    @DeleteMapping("/{code}/stages/{stageCode}")
+    public ResponseEntity<?> deleteStage(@PathVariable String code, @PathVariable String stageCode) {
+        try {
+            workflowService.deleteStage(code, stageCode);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Error deleting stage: " + e.getMessage());
+        }
+    }
+
     // Screen Mapping Endpoints
     @PostMapping("/stages/{stageCode}/screens")
     public ResponseEntity<?> addScreenMapping(@PathVariable String stageCode,

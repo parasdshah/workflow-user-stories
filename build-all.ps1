@@ -31,6 +31,7 @@ Run-Build "service-registry" "mvn" "clean install -DskipTests"
 Run-Build "api-gateway" "mvn" "clean install -DskipTests"
 
 # 3. Workflow Service
+Run-Build "workflow-delegates" "mvn" "clean install -DskipTests"
 Run-Build "workflow-service" "mvn" "clean install -DskipTests"
 
 # 4. Frontend

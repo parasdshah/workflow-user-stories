@@ -33,6 +33,8 @@ interface StageConfig {
     parallelGrouping?: string;
     isRuleStage?: boolean;
     ruleKey?: string;
+    isServiceTask?: boolean;
+    delegateExpression?: string;
     entryCondition?: string;
     // Legacy support for display if needed, but we prefer 'actions'
     allowedActions?: string;
@@ -47,6 +49,7 @@ function WorkflowEditor() {
     const navigate = useNavigate();
     const [opened, { open, close }] = useDisclosure(false);
     const [stages, setStages] = useState<StageConfig[]>([]);
+    const [deletedStages, setDeletedStages] = useState<StageConfig[]>([]);
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
     const [modules, setModules] = useState<string[]>([]);
 
@@ -88,6 +91,8 @@ function WorkflowEditor() {
             parallelGrouping: '',
             isRuleStage: false,
             ruleKey: '',
+            isServiceTask: false,
+            delegateExpression: '',
             entryCondition: '',
             routingRulesList: [] as { condition: string, targetStageCode: string }[]
         }
@@ -142,6 +147,8 @@ function WorkflowEditor() {
             parallelGrouping: stage.parallelGrouping || '',
             isRuleStage: stage.isRuleStage || false,
             ruleKey: stage.ruleKey || '',
+            isServiceTask: (stage as any).isServiceTask || false,
+            delegateExpression: (stage as any).delegateExpression || '',
             entryCondition: stage.entryCondition || '',
             routingRulesList: stage.routingRules ? JSON.parse(stage.routingRules) : []
         });
@@ -149,6 +156,16 @@ function WorkflowEditor() {
     };
 
     const handleDeleteStage = (index: number) => {
+        const stage = stages[index];
+        // If stage has code/id (persisted), add to deleted list to process on save
+        if (stage.stageCode && code) { // Only track if we are editing an existing workflow? Or just if stage itself is old?
+            // Actually, the API needs workflow code and stage code.
+            // If it's a new stage (not saved yet), we don't need to call delete API.
+            // We can check if `code` (workflow param) exists.
+            if (code) {
+                setDeletedStages([...deletedStages, stage]);
+            }
+        }
         setStages(stages.filter((_, i) => i !== index));
     };
 
@@ -241,6 +258,17 @@ function WorkflowEditor() {
 
                 // Mapping save removed as Screen Implementation is deprecated
             }
+
+            // 3. Delete Removed Stages
+            for (const del of deletedStages) {
+                console.log("Deleting Stage:", del.stageCode);
+                try {
+                    await fetch(`/api/workflows/${wfCode}/stages/${del.stageCode}`, { method: 'DELETE' });
+                } catch (e) {
+                    console.error("Failed to delete stage", del.stageCode, e);
+                }
+            }
+            setDeletedStages([]); // Clear after save
 
             alert('Saved successfully!');
             navigate('/');
@@ -369,7 +397,11 @@ function WorkflowEditor() {
                                 <Text fw={700} size="lg">{stageForm.values.stageName || 'New Stage'}</Text>
                                 <Group gap="xs">
                                     <Code>{stageForm.values.stageCode || 'NO_CODE'}</Code>
-                                    <Badge variant="outline">{stageForm.values.isRuleStage ? 'RULE' : 'USER'}</Badge>
+                                    <Badge variant="outline">
+                                        {stageForm.values.isNestedWorkflow ? 'NESTED' :
+                                            stageForm.values.isRuleStage ? 'RULE' :
+                                                stageForm.values.isServiceTask ? 'SERVICE' : 'USER'}
+                                    </Badge>
                                 </Group>
                             </div>
                         </Group>
@@ -409,11 +441,14 @@ function WorkflowEditor() {
                                         onChange={(value) => {
                                             stageForm.setFieldValue('isNestedWorkflow', value === 'NESTED');
                                             stageForm.setFieldValue('isRuleStage', value === 'RULE');
+                                            stageForm.setFieldValue('isServiceTask', value === 'SERVICE');
                                             if (value !== 'NESTED') stageForm.setFieldValue('nestedWorkflowCode', '');
                                             if (value !== 'RULE') stageForm.setFieldValue('ruleKey', '');
+                                            if (value !== 'SERVICE') stageForm.setFieldValue('delegateExpression', '');
                                         }}
                                         data={[
                                             { label: 'User Task', value: 'USER' },
+                                            { label: 'Service Task', value: 'SERVICE' },
                                             { label: 'Nested Workflow', value: 'NESTED' },
                                             { label: 'Business Rule', value: 'RULE' },
                                         ]}
@@ -437,6 +472,16 @@ function WorkflowEditor() {
                                         description="The Key of the uploaded DMN table"
                                         required
                                         {...stageForm.getInputProps('ruleKey')}
+                                    />
+                                )}
+
+                                {stageForm.values.isServiceTask && (
+                                    <TextInput
+                                        label="Delegate Expression"
+                                        placeholder="${myDelegate}"
+                                        description="Expression resolving to a JavaDelegate bean (e.g. ${testDelegate})"
+                                        required
+                                        {...stageForm.getInputProps('delegateExpression')}
                                     />
                                 )}
 

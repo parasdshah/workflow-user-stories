@@ -17,7 +17,7 @@ Start-Sleep -Seconds 10
 
 # Start Workflow Service
 Write-Host "Starting Workflow Service..."
-Start-Process -FilePath "mvn" -ArgumentList "spring-boot:run -f workflow-service/pom.xml" -NoNewWindow
+Start-Process -FilePath "java" -ArgumentList "-Dloader.path=workflow-delegates/target/workflow-delegates-1.0.0-SNAPSHOT.jar -jar workflow-service/target/workflow-service-1.0.0-SNAPSHOT.jar" -NoNewWindow
 Start-Sleep -Seconds 15
 
 # Start Frontend

@@ -122,6 +122,15 @@ public class WorkflowDefinitionService {
         return stageRepository.findByWorkflowCodeOrderBySequenceOrderAsc(workflowCode);
     }
 
+    @Transactional
+    public void deleteStage(String workflowCode, String stageCode) {
+        StageConfig stage = stageRepository.findByWorkflowCodeAndStageCode(workflowCode, stageCode)
+                .orElseThrow(() -> new IllegalArgumentException("Stage not found"));
+        // Additional cleanup if needed (e.g. screen mappings)
+        screenMappingRepository.deleteByStageCode(stageCode);
+        stageRepository.delete(stage);
+    }
+
     // Screen Mapping CRUD
 
     @Transactional

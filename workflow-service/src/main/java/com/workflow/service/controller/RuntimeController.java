@@ -6,9 +6,6 @@ import org.flowable.engine.runtime.ProcessInstance;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.stream.Collectors;
-
 @RestController
 @RequestMapping("/api/runtime")
 @RequiredArgsConstructor
@@ -25,6 +22,5 @@ public class RuntimeController {
         }
         return ResponseEntity.ok(instance.isEnded() ? "COMPLETED" : "ACTIVE");
     }
-
 
 }

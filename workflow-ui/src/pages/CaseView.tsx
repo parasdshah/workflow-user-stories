@@ -61,9 +61,18 @@ export default function CaseView() {
     if (loading) return <Container py="xl"><Loader /></Container>;
     if (!caseDetails) return <Container py="xl"><Text>Case not found</Text></Container>;
 
-    const handleTaskAction = async (taskId: string, outcome?: string) => {
-        const actionLabel = outcome || 'Complete';
-        if (!confirm(`Are you sure you want to ${actionLabel} this task?`)) return;
+    const handleTaskAction = async (taskId: string, outcome?: string, variablesJson?: string) => {
+        // if (!confirm(`Are you sure you want to ${outcome || 'Complete'} this task?`)) return; // Removed implicit confirm since we have a modal now
+
+        let variables = {};
+        if (variablesJson) {
+            try {
+                variables = JSON.parse(variablesJson);
+            } catch (e) {
+                alert("Invalid JSON format");
+                return;
+            }
+        }
 
         try {
             const res = await fetch(`/api/runtime/cases/${id}/tasks/${taskId}/complete`, {
@@ -71,7 +80,8 @@ export default function CaseView() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: 'completed',
-                    outcome: outcome
+                    outcome: outcome,
+                    variables: variables
                 })
             });
 

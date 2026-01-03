@@ -9,5 +9,8 @@ import java.util.Optional;
 @Repository
 public interface ScreenMappingRepository extends JpaRepository<ScreenMapping, Long> {
     List<ScreenMapping> findByStageCode(String stageCode);
+
     Optional<ScreenMapping> findByStageCodeAndScreenCode(String stageCode, String screenCode);
+
+    void deleteByStageCode(String stageCode);
 }

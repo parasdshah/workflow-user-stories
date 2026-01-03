@@ -2,8 +2,6 @@ package com.workflow.service.dto;
 
 import lombok.Data;
 
-import java.util.Date;
-
 @Data
 public class DecisionTableDTO {
     private String id;

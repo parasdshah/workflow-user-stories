@@ -19,6 +19,7 @@
         <module>service-registry</module>
         <module>api-gateway</module>
         <module>workflow-service</module>
+        <module>workflow-delegates</module>
     </modules>
 
     <properties>
