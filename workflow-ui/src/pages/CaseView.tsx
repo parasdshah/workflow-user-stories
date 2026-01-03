@@ -1,4 +1,4 @@
-import { Container, Title, Paper, Group, Text, Grid, Badge, Loader, Button, Accordion, Code, Stack } from '@mantine/core';
+import { Container, Title, Paper, Group, Text, Grid, Badge, Loader, Button, Code, Stack } from '@mantine/core';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { CaseTimeline } from '../components/cases/CaseTimeline';
