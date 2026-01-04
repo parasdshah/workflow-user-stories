@@ -2,6 +2,11 @@ package com.workflow.service.controller;
 
 import com.workflow.service.dto.DecisionTableDTO;
 import com.workflow.service.service.DmnConversionService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.dmn.api.DmnDecision;
@@ -18,16 +23,23 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/rules")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "DMN Rules", description = "APIs for managing DMN decision tables and business rules")
 public class RuleController {
 
     private final DmnRepositoryService dmnRepositoryService;
     private final DmnConversionService dmnConversionService;
 
+    @Operation(summary = "Upload DMN rule", description = "Uploads a CSV file and converts it to DMN decision table format")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Rule uploaded and deployed successfully"),
+            @ApiResponse(responseCode = "400", description = "Error reading CSV file"),
+            @ApiResponse(responseCode = "500", description = "Error processing rule")
+    })
     @PostMapping("/upload")
     public ResponseEntity<String> uploadRule(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam("key") String key,
-            @RequestParam("name") String name) {
+            @Parameter(description = "CSV file containing decision table") @RequestParam("file") MultipartFile file,
+            @Parameter(description = "Decision table key") @RequestParam("key") String key,
+            @Parameter(description = "Decision table name") @RequestParam("name") String name) {
 
         log.info("Uploading DMN Rule: Key={}, Name={}", key, name);
 
@@ -52,6 +64,8 @@ public class RuleController {
         }
     }
 
+    @Operation(summary = "List all rules", description = "Retrieves all deployed DMN decision tables (latest versions)")
+    @ApiResponse(responseCode = "200", description = "Successfully retrieved decision tables")
     @GetMapping
     public ResponseEntity<List<DecisionTableDTO>> listRules() {
         List<DmnDecision> decisions = dmnRepositoryService.createDecisionQuery()
@@ -74,8 +88,11 @@ public class RuleController {
         return ResponseEntity.ok(dtos);
     }
 
+    @Operation(summary = "Delete rule", description = "Deletes a DMN decision table deployment")
+    @ApiResponse(responseCode = "204", description = "Rule deleted successfully")
     @DeleteMapping("/{deploymentId}")
-    public ResponseEntity<Void> deleteRule(@PathVariable String deploymentId) {
+    public ResponseEntity<Void> deleteRule(
+            @Parameter(description = "Deployment ID") @PathVariable String deploymentId) {
         log.info("Deleting Rule Deployment: {}", deploymentId);
         dmnRepositoryService.deleteDeployment(deploymentId);
         return ResponseEntity.noContent().build();

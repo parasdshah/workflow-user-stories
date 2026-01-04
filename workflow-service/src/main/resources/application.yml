@@ -31,7 +31,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: none
       cors:
         allowed-origins: "http://localhost:5173"
         allowed-methods: GET, POST, PUT, DELETE, OPTIONS
@@ -39,3 +39,12 @@ management:
 workflow:
   export:
     secret: Workflow@123
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  show-actuator: true
