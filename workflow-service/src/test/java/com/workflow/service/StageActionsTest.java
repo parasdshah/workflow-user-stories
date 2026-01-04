@@ -109,7 +109,7 @@ public class StageActionsTest {
                 assertThat(historicStage.getActionTaken()).isEqualTo("APPROVE");
 
                 // 9. Verify User Task History
-                List<StageDTO> userHistory = caseService.getUserTaskHistory("test-user");
+                List<StageDTO> userHistory = caseService.getUserTaskHistory("test-user", null, null);
                 assertThat(userHistory).isNotEmpty();
                 StageDTO historyItem = userHistory.stream()
                                 .filter(h -> h.getTaskId().equals(activeStage.getTaskId()))

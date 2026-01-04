@@ -28,8 +28,11 @@ public class CaseController {
     @Operation(summary = "Get all active cases", description = "Retrieves all currently active workflow case instances")
     @ApiResponse(responseCode = "200", description = "Successfully retrieved active cases")
     @GetMapping
-    public ResponseEntity<List<CaseDTO>> getAllActiveCases() {
-        return ResponseEntity.ok(caseService.getAllActiveCases());
+    public ResponseEntity<List<CaseDTO>> getAllActiveCases(
+            @RequestParam(required = false) String workflowCode,
+            @RequestParam(required = false) String initiator,
+            @RequestParam(required = false) String cpId) {
+        return ResponseEntity.ok(caseService.getAllActiveCases(workflowCode, initiator, cpId));
     }
 
     @Operation(summary = "Initiate a new case", description = "Starts a new workflow case instance with the specified workflow code and variables")
@@ -82,8 +85,10 @@ public class CaseController {
     @ApiResponse(responseCode = "200", description = "Successfully retrieved task history")
     @GetMapping("/tasks/history")
     public ResponseEntity<List<StageDTO>> getUserTaskHistory(
-            @Parameter(description = "User ID") @RequestParam String userId) {
-        return ResponseEntity.ok(caseService.getUserTaskHistory(userId));
+            @Parameter(description = "User ID") @RequestParam String userId,
+            @Parameter(description = "Workflow Code") @RequestParam(required = false) String workflowCode,
+            @Parameter(description = "CP ID") @RequestParam(required = false) String cpId) {
+        return ResponseEntity.ok(caseService.getUserTaskHistory(userId, workflowCode, cpId));
     }
 
     @Operation(summary = "Complete a task", description = "Completes a specific task within a case with the provided variables")

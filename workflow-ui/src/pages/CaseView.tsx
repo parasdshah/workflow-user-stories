@@ -1,4 +1,4 @@
-import { Container, Title, Paper, Group, Text, Grid, Badge, Loader, Button, Accordion, Code } from '@mantine/core';
+import { Container, Title, Paper, Group, Text, Grid, Badge, Loader, Button, Code, Stack } from '@mantine/core';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { CaseTimeline } from '../components/cases/CaseTimeline';
@@ -138,16 +138,11 @@ export default function CaseView() {
 
                     <Paper withBorder p="md" mb="md">
                         <Title order={5} mb="sm">Process Variables</Title>
-                        <Accordion variant="separated">
-                            <Accordion.Item value="json">
-                                <Accordion.Control>View JSON Data</Accordion.Control>
-                                <Accordion.Panel>
-                                    <Code block style={{ whiteSpace: 'pre-wrap', maxHeight: '300px', overflowY: 'auto' }}>
-                                        {JSON.stringify(caseDetails.processVariables || {}, null, 2)}
-                                    </Code>
-                                </Accordion.Panel>
-                            </Accordion.Item>
-                        </Accordion>
+
+                        <Code block style={{ whiteSpace: 'pre-wrap', maxHeight: '300px', overflowY: 'auto' }}>
+                            {JSON.stringify(caseDetails.processVariables || {}, null, 2)}
+                        </Code>
+
                     </Paper>
 
                     <Button variant="light" fullWidth onClick={() => navigate('/inbox')}>
@@ -163,5 +158,4 @@ export default function CaseView() {
     );
 }
 
-// Importing Stack locally to avoid top-level import conflict if any
-import { Stack } from '@mantine/core';
+

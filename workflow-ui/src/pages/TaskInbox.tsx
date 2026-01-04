@@ -1,5 +1,5 @@
 
-import { Container, Title, Accordion, Badge, Group, Text, Loader, Button, Tabs, ActionIcon, Modal, Code, Tooltip } from '@mantine/core';
+import { Container, Title, Accordion, Badge, Group, Text, Loader, Button, Tabs, ActionIcon, Modal, Code, Tooltip, TextInput } from '@mantine/core';
 import { IconCheck, IconX, IconCode } from '@tabler/icons-react';
 import React, { useState, useEffect } from 'react';
 import { useDisclosure } from '@mantine/hooks';
@@ -9,6 +9,8 @@ interface CaseDto {
     workflowCode: string;
     startTime: string;
     processVariables?: any;
+    workflowName?: string;
+    startUserId?: string;
 }
 
 interface TaskDto {
@@ -32,7 +34,6 @@ interface HistoricStageDto {
     actionTaken?: string;
     parentCaseId?: string;
     parentWorkflowCode?: string;
-
     parentWorkflowName?: string;
     processVariables?: any;
 }
@@ -57,9 +58,24 @@ function TaskInbox() {
         open();
     };
 
+    const [filters, setFilters] = useState({
+        workflowCode: '',
+        initiator: '',
+        cpId: ''
+    });
+
+    const handleFilterChange = (key: string, value: string) => {
+        setFilters(prev => ({ ...prev, [key]: value }));
+    };
+
     useEffect(() => {
+        const queryParams = new URLSearchParams();
+        if (filters.workflowCode) queryParams.append('workflowCode', filters.workflowCode);
+        if (filters.cpId) queryParams.append('cpId', filters.cpId);
+
         if (activeTab === 'active') {
-            fetch('/api/runtime/cases')
+            if (filters.initiator) queryParams.append('initiator', filters.initiator);
+            fetch(`/api/runtime/cases?${queryParams.toString()}`)
                 .then(res => {
                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     return res.json();
@@ -78,9 +94,10 @@ function TaskInbox() {
                 });
         } else if (activeTab === 'history') {
             setLoadingHistory(true);
-            // TODO: Get real userId. For now "user"
-            const userId = "user"; // Or "test-user"
-            fetch(`/api/runtime/cases/tasks/history?userId=${userId}`)
+            const userId = "user"; // Hardcoded for simplified auth context
+            queryParams.append('userId', userId);
+
+            fetch(`/api/runtime/cases/tasks/history?${queryParams.toString()}`)
                 .then(res => {
                     if (!res.ok) throw new Error(`Status: ${res.status}`);
                     return res.json();
@@ -99,7 +116,7 @@ function TaskInbox() {
                 })
                 .finally(() => setLoadingHistory(false));
         }
-    }, [activeTab]);
+    }, [activeTab, filters]);
 
     const handleAccordionChange = (caseId: string | null) => {
         if (!caseId) return;
@@ -119,7 +136,7 @@ function TaskInbox() {
 
     // Group history by Case for better view
     const groupedHistory = Array.isArray(history) ? history.reduce((acc, stage) => {
-        const groupKey = stage.parentCaseId || stage.caseId; // Group by Parent ID if exists to show Overall context
+        const groupKey = stage.parentCaseId || stage.caseId;
 
         if (!groupKey) return acc;
         if (!acc[groupKey]) {
@@ -131,7 +148,31 @@ function TaskInbox() {
 
     return (
         <Container size="lg" py="xl">
-            <Title order={2} mb="lg">Task Inbox</Title>
+            <Group justify="space-between" mb="lg">
+                <Title order={2}>Task Inbox</Title>
+                <Group>
+                    <TextInput
+                        placeholder="Workflow Code"
+                        size="xs"
+                        value={filters.workflowCode}
+                        onChange={(e) => handleFilterChange('workflowCode', e.currentTarget.value)}
+                    />
+                    {activeTab === 'active' && (
+                        <TextInput
+                            placeholder="Initiator"
+                            size="xs"
+                            value={filters.initiator}
+                            onChange={(e) => handleFilterChange('initiator', e.currentTarget.value)}
+                        />
+                    )}
+                    <TextInput
+                        placeholder="CP ID"
+                        size="xs"
+                        value={filters.cpId}
+                        onChange={(e) => handleFilterChange('cpId', e.currentTarget.value)}
+                    />
+                </Group>
+            </Group>
 
             <Tabs value={activeTab} onChange={setActiveTab}>
                 <Tabs.List mb="md">

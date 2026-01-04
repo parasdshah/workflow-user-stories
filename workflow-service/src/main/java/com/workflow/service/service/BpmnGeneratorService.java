@@ -40,7 +40,7 @@ public class BpmnGeneratorService {
         startEvent.setId("start");
         process.addFlowElement(startEvent);
 
-        FlowElement lastElement = startEvent;
+        // FlowElement lastElement = startEvent; //Paras
 
         // Sort stages by sequence
         stages.sort((s1, s2) -> s1.getSequenceOrder().compareTo(s2.getSequenceOrder()));
@@ -228,9 +228,13 @@ public class BpmnGeneratorService {
 
     private void applyHooks(FlowElement stageElement, StageConfig stage) {
         if (stage.getPreEntryHook() != null && !stage.getPreEntryHook().isBlank()) {
-            stageElement.setExecutionListeners(List.of(createListener(stage.getPreEntryHook(), "start")));
+            stageElement.setExecutionListeners(
+                    new java.util.ArrayList<>(List.of(createListener(stage.getPreEntryHook(), "start"))));
         }
         if (stage.getPostExitHook() != null && !stage.getPostExitHook().isBlank()) {
+            if (stageElement.getExecutionListeners() == null) {
+                stageElement.setExecutionListeners(new java.util.ArrayList<>());
+            }
             stageElement.getExecutionListeners().add(createListener(stage.getPostExitHook(), "end"));
         }
 
