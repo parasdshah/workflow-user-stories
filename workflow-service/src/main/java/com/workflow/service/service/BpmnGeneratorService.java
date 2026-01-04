@@ -40,7 +40,7 @@ public class BpmnGeneratorService {
         startEvent.setId("start");
         process.addFlowElement(startEvent);
 
-        FlowElement lastElement = startEvent;
+        // FlowElement lastElement = startEvent; //Paras
 
         // Sort stages by sequence
         stages.sort((s1, s2) -> s1.getSequenceOrder().compareTo(s2.getSequenceOrder()));
