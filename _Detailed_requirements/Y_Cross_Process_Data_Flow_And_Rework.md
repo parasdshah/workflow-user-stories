@@ -90,6 +90,23 @@ This approach is "cleaner" than using gateways because:
             *   **Target Stage**: Dropdown of existing stages in the Parent workflow (e.g., Select "Stage A (ABC)").
     *   *Effect*: This matches the `REWORK_REQUIRED` error from the child and creates the feedback loop to the target stage.
 
+**Configuration Flow Diagram**:
+```mermaid
+graph TD
+    subgraph Child Process (XYZ)
+        Direction[User Actions]
+        Action[Action: Rework] -->|Triggers| ErrorEnd(Error End Event: REWORK_REQUIRED)
+    end
+
+    subgraph Parent Process (ABC)
+        CallAct[Call Activity: XYZ]
+        ExceptionRule[Exception Rule] -->|Catches Code: REWORK_REQUIRED| Boundary(Boundary Event)
+        Boundary -->|Routes To| TargetStage[Target: Stage A]
+    end
+
+    ErrorEnd -.->|Matches Error Code| ExceptionRule
+```
+
 **Updated Data Model (StageConfig / ActionConfig)**:
 ```json
 {

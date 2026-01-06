@@ -208,6 +208,114 @@ public class WorkflowDefinitionService {
         validateClassExists(stage.getPostExitHook());
     }
 
+    // Global Graph Generation
+    public com.workflow.service.dto.GraphDTO getGlobalGraph(String rootWorkflowCode) {
+        com.workflow.service.dto.GraphDTO graph = new com.workflow.service.dto.GraphDTO();
+        java.util.Set<String> visited = new java.util.HashSet<>();
+
+        // Start recursion with no parent (Root Level)
+        buildGraphRecursively(rootWorkflowCode, null, graph, visited);
+
+        return graph;
+    }
+
+    private void buildGraphRecursively(String workflowCode, String parentNodeId, com.workflow.service.dto.GraphDTO graph, java.util.Set<String> visited) {
+        // Prevent infinite recursion (Cycles are blocked by save, but good to be safe)
+        // We track "WorkflowCode within a specific path"?? 
+        // Actually, a workflow CAN be called multiple times in different branches.
+        // So simple "visited workflow code" is too strict. We need to stop if DEEP recursion cycle.
+        // For now, let's limit depth or rely on the fact that saveStage blocks cycles.
+        
+        Optional<WorkflowMaster> wfOpt = workflowRepository.findByWorkflowCode(workflowCode);
+        if (wfOpt.isEmpty()) return;
+
+        List<StageConfig> stages = stageRepository.findByWorkflowCodeOrderBySequenceOrderAsc(workflowCode);
+        
+        // Context Prefix for IDs to ensure uniqueness across the flattened graph
+        // If parentNodeId is "root:stage1", then children are "root:stage1:childStage"
+        String prefix = (parentNodeId == null) ? workflowCode : parentNodeId;
+
+        // Create Start Node
+        String startNodeId = prefix + "_start";
+        graph.getNodes().add(com.workflow.service.dto.GraphDTO.NodeDTO.builder()
+                .id(startNodeId)
+                .label("Start")
+                .type("bpmnStart") // Use our custom types
+                .parentId(parentNodeId)
+                .position(new com.workflow.service.dto.GraphDTO.Position(0, 0)) // Layout will fix this
+                .build());
+
+        String previousNodeId = startNodeId;
+
+        for (StageConfig stage : stages) {
+            String currentNodeId = prefix + "_" + stage.getStageCode();
+            String nodeType = "bpmnUserTask";
+            String label = stage.getStageName();
+
+            // Special Handling via Type
+            if (stage.isNestedWorkflow()) {
+                nodeType = "bpmnGroup"; // Special type for Container
+                label = stage.getStageName() + " (Nested: " + stage.getNestedWorkflowCode() + ")";
+                
+                // Recurse!
+                // The current node acts as the Parent for the child workflow
+                buildGraphRecursively(stage.getNestedWorkflowCode(), currentNodeId, graph, visited);
+            } else if (stage.isRuleStage()) {
+                nodeType = "bpmnServiceTask";
+                label = "Rule: " + stage.getRuleKey();
+            }
+
+            graph.getNodes().add(com.workflow.service.dto.GraphDTO.NodeDTO.builder()
+                    .id(currentNodeId)
+                    .label(label)
+                    .type(nodeType)
+                    .parentId(parentNodeId)
+                    .data(stage) // Pass full stage config for details
+                    .position(new com.workflow.service.dto.GraphDTO.Position(0, 0))
+                    .build());
+
+            // Edge from Previous -> Current
+            graph.getEdges().add(com.workflow.service.dto.GraphDTO.EdgeDTO.builder()
+                    .id("e_" + previousNodeId + "_" + currentNodeId)
+                    .source(previousNodeId)
+                    .target(currentNodeId)
+                    .type("smoothstep")
+                    .build());
+            
+            // Note: If this WAS a nested workflow, should we connect the "previous" to "child start"?
+            // Visualizer option:
+            // 1. Connect Parent-Prev -> Parent-Group-Container. (Standard)
+            // 2. Connect Parent-Prev -> Child-Start. (Violates encapsulation, messy)
+            // We stick to 1. The Group Node IS the node in the flow.
+            
+            // Connect Inner Flow logic?
+            // If it's a Group, we want to visually connect the "Group Input" to "Inner Start"?
+            // ReactFlow doesn't do "Port on Boundary" easily without custom handles.
+            // For now, we rely on the visual nesting. The flow goes TO the group. 
+            // Inside the group, it starts at Inner Start.
+            
+            previousNodeId = currentNodeId;
+        }
+
+        // Create End Node
+        String endNodeId = prefix + "_end";
+        graph.getNodes().add(com.workflow.service.dto.GraphDTO.NodeDTO.builder()
+                .id(endNodeId)
+                .label("End")
+                .type("bpmnEnd")
+                .parentId(parentNodeId)
+                .position(new com.workflow.service.dto.GraphDTO.Position(0, 0))
+                .build());
+
+        // Edge from Last -> End
+        graph.getEdges().add(com.workflow.service.dto.GraphDTO.EdgeDTO.builder()
+                .id("e_" + previousNodeId + "_" + endNodeId)
+                .source(previousNodeId)
+                .target(endNodeId)
+                .type("smoothstep")
+                .build());
+    }
+
     private void validateClassExists(String fqn) {
         if (fqn == null || fqn.isBlank())
             return;

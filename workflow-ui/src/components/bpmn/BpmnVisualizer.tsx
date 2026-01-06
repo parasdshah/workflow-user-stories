@@ -234,6 +234,38 @@ function BpmnCanvas({ stages, workflow }: BpmnVisualizerProps) {
                     previousNodeId = nodeId;
                 }
 
+                // Exception Rules (Rework)
+                if ((stage as any).exceptionRules) {
+                    try {
+                        const exceptions = JSON.parse((stage as any).exceptionRules);
+                        if (Array.isArray(exceptions) && exceptions.length > 0) {
+                            exceptions.forEach((ex: any, idx: number) => {
+                                if (ex.targetStageCode) {
+                                    // Create virtual boundary node
+                                    const boundaryId = `boundary_${nodeId}_${idx}`;
+                                    nodes.push({
+                                        id: boundaryId,
+                                        type: 'bpmnGateway', // Reusing gateway as small circle/diamond for now
+                                        data: { label: '!' }, // Exclamation for Error
+                                        position: { x: 0, y: 0 },
+                                        parentNode: nodeId, // Visual attachment if we supported nesting, but Dagre is flat. 
+                                        // For Dagre flat layout, we make it a separate node but try to position it close??
+                                        // Actually, let's just make it a separate node in the flow for now to keep it simple
+                                    });
+
+                                    // But wait, Dagre will re-layout everything. A Boundary event "attached" is hard in auto-layout.
+                                    // Alternative: Just draw an edge from the Stage directly, but styled as "Error".
+                                    // Or better: Edge from Stage -> Target, labeled with Error Code, red dashed line.
+
+                                    edges.push(createEdge(nodeId, ex.targetStageCode, `Error: ${ex.errorCode}`, '#e03131', 'EXCEPTION', 'bottom'));
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        console.warn("Failed to parse exception rules", e);
+                    }
+                }
+
                 // Action-based Routing
                 if (stage.actions) {
                     stage.actions.forEach(action => {

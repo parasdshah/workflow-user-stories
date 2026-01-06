@@ -1,13 +1,12 @@
 import { Container, Title, Button, TextInput, Group, Stack, Paper, Select, NumberInput, Modal, Table, ActionIcon, SimpleGrid, Tabs, SegmentedControl, Text, Code, Badge } from '@mantine/core';
-import { IconEdit, IconTrash, IconGitBranch, IconUser, IconSettings, IconGavel, IconArrowsSplit, IconSitemap, IconInfoCircle, IconBolt, IconPlug } from '@tabler/icons-react';
+import { IconEdit, IconTrash, IconGitBranch, IconUser, IconSettings, IconGavel, IconArrowsSplit, IconSitemap, IconInfoCircle, IconBolt, IconPlug, IconWorld } from '@tabler/icons-react';
 import { useForm } from '@mantine/form';
 import { useDisclosure } from '@mantine/hooks';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { BpmnVisualizer } from '../components/bpmn/BpmnVisualizer';
 import { FlowchartVisualizer } from '../components/bpmn/FlowchartVisualizer';
-
-// Define types locally or import from a shared types file
+import { GlobalProcessVisualizer } from '../components/bpmn/GlobalProcessVisualizer';
 interface StageAction {
     id?: number;
     actionLabel: string;
@@ -313,6 +312,7 @@ function WorkflowEditor() {
                         <Tabs.Tab value="config" leftSection={<IconEdit size={14} />}>Configuration</Tabs.Tab>
                         <Tabs.Tab value="diagram" leftSection={<IconGitBranch size={14} />}>BPMN Diagram</Tabs.Tab>
                         <Tabs.Tab value="tree" leftSection={<IconSitemap size={14} />}>Decision Tree</Tabs.Tab>
+                        <Tabs.Tab value="map" leftSection={<IconWorld size={14} />}>Global Map</Tabs.Tab>
                     </Tabs.List>
 
                     <Tabs.Panel value="config">
@@ -411,6 +411,10 @@ function WorkflowEditor() {
 
                     <Tabs.Panel value="tree">
                         <FlowchartVisualizer stages={stages} workflow={form.values} />
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="map">
+                        <GlobalProcessVisualizer workflowCode={code || ''} />
                     </Tabs.Panel>
                 </Tabs>
             </Paper>

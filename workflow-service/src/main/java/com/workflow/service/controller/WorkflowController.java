@@ -75,6 +75,14 @@ public class WorkflowController {
         return ResponseEntity.ok(workflowService.getWorkflowStats());
     }
 
+    @Operation(summary = "Get global process graph", description = "Retrieves the complete nested graph including child workflows")
+    @ApiResponse(responseCode = "200", description = "Successfully retrieved global graph")
+    @GetMapping("/{code}/global-graph")
+    public ResponseEntity<com.workflow.service.dto.GraphDTO> getGlobalGraph(
+            @Parameter(description = "Root Workflow code") @PathVariable String code) {
+        return ResponseEntity.ok(workflowService.getGlobalGraph(code));
+    }
+
     // Stage Endpoints
     @Operation(summary = "Add stage to workflow", description = "Adds a new stage configuration to an existing workflow")
     @ApiResponses(value = {

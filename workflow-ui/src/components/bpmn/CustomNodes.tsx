@@ -155,3 +155,30 @@ export function BPMNGatewayNode({ }: NodeProps) {
         </>
     );
 }
+
+// Group Node (Container for Nested Workflow)
+export function BPMNGroupNode({ data }: any) {
+    return (
+        <div style={{
+            height: '100%', width: '100%',
+            border: '2px dashed #adb5bd',
+            backgroundColor: 'rgba(240, 240, 240, 0.5)',
+            borderRadius: 8,
+            position: 'relative'
+        }}>
+            <div style={{
+                position: 'absolute',
+                top: -24,
+                left: 0,
+                background: '#e9ecef',
+                padding: '2px 8px',
+                borderRadius: 4,
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#495057'
+            }}>
+                {data.label}
+            </div>
+        </div>
+    );
+}
