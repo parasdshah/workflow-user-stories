@@ -48,6 +48,17 @@ interface StageConfig {
 
 
 
+const safeParse = (jsonString: string | undefined | null) => {
+    if (!jsonString) return [];
+    try {
+        const parsed = JSON.parse(jsonString);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+        console.warn("Failed to parse JSON:", jsonString, e);
+        return [];
+    }
+};
+
 function WorkflowEditor() {
     const { code } = useParams();
     const navigate = useNavigate();
@@ -111,7 +122,8 @@ function WorkflowEditor() {
             const updated = [...stages];
             const payload = {
                 ...values,
-                routingRules: JSON.stringify(values.routingRulesList)
+                routingRules: JSON.stringify(values.routingRulesList),
+                exceptionRules: JSON.stringify(values.exceptionRulesList)
             };
             updated[editingIndex] = payload;
             setStages(updated);
@@ -119,7 +131,8 @@ function WorkflowEditor() {
             // Add new
             const payload = {
                 ...values,
-                routingRules: JSON.stringify(values.routingRulesList)
+                routingRules: JSON.stringify(values.routingRulesList),
+                exceptionRules: JSON.stringify(values.exceptionRulesList)
             };
             setStages([...stages, payload]);
         }
@@ -155,8 +168,8 @@ function WorkflowEditor() {
             isServiceTask: (stage as any).isServiceTask || false,
             delegateExpression: (stage as any).delegateExpression || '',
             entryCondition: stage.entryCondition || '',
-            routingRulesList: stage.routingRules ? JSON.parse(stage.routingRules) : [],
-            exceptionRulesList: (stage as any).exceptionRules ? JSON.parse((stage as any).exceptionRules) : []
+            routingRulesList: safeParse(stage.routingRules),
+            exceptionRulesList: safeParse((stage as any).exceptionRules)
         });
         open();
     };
@@ -207,7 +220,7 @@ function WorkflowEditor() {
                 })
                 .then(data => {
                     console.log("Loaded Stages:", data);
-                    setStages(data);
+                    setStages(Array.isArray(data) ? data : []);
                 })
                 .catch(err => {
                     console.error("Failed to load stages", err);
@@ -343,41 +356,48 @@ function WorkflowEditor() {
                                             </Table.Tr>
                                         </Table.Thead>
                                         <Table.Tbody>
-                                            {stages.sort((a, b) => a.sequenceOrder - b.sequenceOrder).map((s, index) => (
-                                                <Table.Tr key={s.stageCode}>
-                                                    <Table.Td>{s.sequenceOrder}</Table.Td>
-                                                    <Table.Td>{s.stageName}</Table.Td>
-                                                    <Table.Td>{s.stageCode}</Table.Td>
-                                                    <Table.Td>
-                                                        <Stack gap={4}>
-                                                            {s.isNestedWorkflow ? <Group gap={5}><IconSettings size={16} /><Text size="xs">Nested</Text></Group> :
-                                                                s.isRuleStage ? <Group gap={5}><IconGavel size={16} /><Text size="xs">Rule</Text></Group> :
-                                                                    <Group gap={5}><IconUser size={16} /><Text size="xs">User</Text></Group>
-                                                            }
-                                                            {s.routingRules && s.routingRules !== '[]' && (
-                                                                <Group gap={5}>
-                                                                    <IconArrowsSplit size={16} color="orange" />
-                                                                    <Text size="xs" c="orange" fw={500}>Branch</Text>
-                                                                </Group>
-                                                            )}
-                                                        </Stack>
-                                                    </Table.Td>
-                                                    <Table.Td>
-                                                        {s.isNestedWorkflow ? s.nestedWorkflowCode : (s.isRuleStage ? s.ruleKey : '-')}
-                                                    </Table.Td>
-                                                    <Table.Td>{s.actions?.map(a => a.actionLabel).join(', ') || s.allowedActions || '-'}</Table.Td>
-                                                    <Table.Td>
-                                                        <Group gap="xs">
-                                                            <ActionIcon variant="subtle" color="blue" onClick={() => openEditModal(index)}>
-                                                                <IconEdit size={16} />
-                                                            </ActionIcon>
-                                                            <ActionIcon variant="subtle" color="red" onClick={() => handleDeleteStage(index)}>
-                                                                <IconTrash size={16} />
-                                                            </ActionIcon>
-                                                        </Group>
+                                            {stages && stages.length > 0 ? (
+                                                stages.sort((a, b) => a.sequenceOrder - b.sequenceOrder).map((s, index) => (
+                                                    <Table.Tr key={s.stageCode}>
+                                                        <Table.Td>{s.sequenceOrder}</Table.Td>
+                                                        <Table.Td>{s.stageName}</Table.Td>
+                                                        <Table.Td>{s.stageCode}</Table.Td>
+                                                        <Table.Td>
+                                                            <Stack gap={4}>
+                                                                {s.isNestedWorkflow ? <Group gap={5}><IconSettings size={16} /><Text size="xs">Nested</Text></Group> :
+                                                                    s.isRuleStage ? <Group gap={5}><IconGavel size={16} /><Text size="xs">Rule</Text></Group> :
+                                                                        <Group gap={5}><IconUser size={16} /><Text size="xs">User</Text></Group>
+                                                                }
+                                                                {s.routingRules && s.routingRules !== '[]' && (
+                                                                    <Group gap={5}>
+                                                                        <IconArrowsSplit size={16} color="orange" />
+                                                                        <Text size="xs" c="orange" fw={500}>Branch</Text>
+                                                                    </Group>
+                                                                )}
+                                                            </Stack>
+                                                        </Table.Td>
+                                                        <Table.Td>
+                                                            {s.isNestedWorkflow ? s.nestedWorkflowCode : (s.isRuleStage ? s.ruleKey : '-')}
+                                                        </Table.Td>
+                                                        <Table.Td>{s.actions?.map(a => a.actionLabel).join(', ') || s.allowedActions || '-'}</Table.Td>
+                                                        <Table.Td>
+                                                            <Group gap="xs">
+                                                                <ActionIcon variant="subtle" color="blue" onClick={() => openEditModal(index)}>
+                                                                    <IconEdit size={16} />
+                                                                </ActionIcon>
+                                                                <ActionIcon variant="subtle" color="red" onClick={() => handleDeleteStage(index)}>
+                                                                    <IconTrash size={16} />
+                                                                </ActionIcon>
+                                                            </Group>
+                                                        </Table.Td>
+                                                    </Table.Tr>
+                                                ))) : (
+                                                <Table.Tr>
+                                                    <Table.Td colSpan={8} align="center">
+                                                        <Text c="dimmed" fs="italic">No stages defined yet.</Text>
                                                     </Table.Td>
                                                 </Table.Tr>
-                                            ))}
+                                            )}
                                         </Table.Tbody>
                                     </Table>
                                 </Paper>
@@ -650,8 +670,65 @@ function WorkflowEditor() {
                                     </Table.Tbody>
                                 </Table>
                             </Stack>
+
                         </Tabs.Panel>
-                    </Tabs >
+                        <Tabs.Panel value="exceptions">
+                            <Stack>
+                                <Paper withBorder p="xs" bg="orange.0" mb="sm">
+                                    <Text size="sm">Define how to handle errors thrown by the nested workflow (e.g. Rework).</Text>
+                                </Paper>
+                                <Group justify="space-between">
+                                    <Text fw={500}>Exception Rules</Text>
+                                    <Button size="xs" variant="light" onClick={() => {
+                                        stageForm.insertListItem('exceptionRulesList', { errorCode: '', targetStageCode: '' });
+                                    }}>
+                                        + Add Rule
+                                    </Button>
+                                </Group>
+
+                                <Table>
+                                    <Table.Thead>
+                                        <Table.Tr>
+                                            <Table.Th>Error Code (e.g. REWORK_REQUIRED)</Table.Th>
+                                            <Table.Th>Target Stage</Table.Th>
+                                            <Table.Th style={{ width: 50 }}></Table.Th>
+                                        </Table.Tr>
+                                    </Table.Thead>
+                                    <Table.Tbody>
+                                        {stageForm.values.exceptionRulesList?.map((_: any, idx: number) => (
+                                            <Table.Tr key={idx}>
+                                                <Table.Td>
+                                                    <TextInput
+                                                        placeholder="REWORK"
+                                                        {...stageForm.getInputProps(`exceptionRulesList.${idx}.errorCode`)}
+                                                    />
+                                                </Table.Td>
+                                                <Table.Td>
+                                                    <Select
+                                                        placeholder="Select Stage"
+                                                        data={stages.filter(s => s.stageCode !== stageForm.values.stageCode).map(s => s.stageCode)}
+                                                        {...stageForm.getInputProps(`exceptionRulesList.${idx}.targetStageCode`)}
+                                                    />
+                                                </Table.Td>
+                                                <Table.Td>
+                                                    <ActionIcon color="red" onClick={() => stageForm.removeListItem('exceptionRulesList', idx)}>
+                                                        <IconTrash size={16} />
+                                                    </ActionIcon>
+                                                </Table.Td>
+                                            </Table.Tr>
+                                        ))}
+                                        {(!stageForm.values.exceptionRulesList || stageForm.values.exceptionRulesList.length === 0) && (
+                                            <Table.Tr>
+                                                <Table.Td colSpan={3} align="center">
+                                                    <Text size="xs" c="dimmed">No exception rules configured.</Text>
+                                                </Table.Td>
+                                            </Table.Tr>
+                                        )}
+                                    </Table.Tbody>
+                                </Table>
+                            </Stack>
+                        </Tabs.Panel>
+                    </Tabs>
 
                     <Button type="submit" mt="md" fullWidth>{editingIndex !== null ? "Update Stage" : "Add Stage"}</Button>
                 </form >
