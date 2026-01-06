@@ -19,6 +19,7 @@ interface StageDTO {
 function NestedTimeline({ caseId }: { caseId: string }) {
     const [stages, setStages] = useState<StageDTO[]>([]);
     const [loading, setLoading] = useState(true);
+    const [expandedSubProcesses, setExpandedSubProcesses] = useState<{ [key: string]: boolean }>({});
 
     useEffect(() => {
         fetch(`/api/runtime/cases/${caseId}/stages`)
@@ -27,6 +28,13 @@ function NestedTimeline({ caseId }: { caseId: string }) {
             .catch(err => console.error(err))
             .finally(() => setLoading(false));
     }, [caseId]);
+
+    const toggleSubProcess = (processId: string) => {
+        setExpandedSubProcesses(prev => ({
+            ...prev,
+            [processId]: !prev[processId]
+        }));
+    };
 
     if (loading) return <Loader size="xs" />;
 
@@ -52,6 +60,27 @@ function NestedTimeline({ caseId }: { caseId: string }) {
                         <Text size="xs" mt={4} c="dimmed">
                             Completed: {new Date(stage.endTime).toLocaleString()}
                         </Text>
+                    )}
+
+                    {stage.subProcessInstanceId && (
+                        <div style={{ marginTop: 8 }}>
+                            <Button
+                                variant="subtle"
+                                size="xs"
+                                onClick={() => toggleSubProcess(stage.subProcessInstanceId!)}
+                                leftSection={expandedSubProcesses[stage.subProcessInstanceId!] ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+                            >
+                                {expandedSubProcesses[stage.subProcessInstanceId!] ? 'Hide Sub-process' : 'View Sub-process'}
+                            </Button>
+                            <Collapse in={expandedSubProcesses[stage.subProcessInstanceId!]}>
+                                <Card withBorder padding="sm" mt="xs" bg="gray.0">
+                                    <Text size="xs" fw={500} c="dimmed" mb="xs">Sub-workflow: {stage.subProcessInstanceId}</Text>
+                                    {expandedSubProcesses[stage.subProcessInstanceId!] && (
+                                        <NestedTimeline caseId={stage.subProcessInstanceId!} />
+                                    )}
+                                </Card>
+                            </Collapse>
+                        </div>
                     )}
                 </Timeline.Item>
             ))}
