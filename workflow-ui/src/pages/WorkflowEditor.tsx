@@ -441,10 +441,10 @@ function WorkflowEditor() {
                         <Tabs.List mb="md">
                             <Tabs.Tab value="general" leftSection={<IconInfoCircle size={14} />}>General</Tabs.Tab>
                             <Tabs.Tab value="config" leftSection={<IconSettings size={14} />}>Configuration</Tabs.Tab>
+                            {stageForm.values.isNestedWorkflow && <Tabs.Tab value="exceptions" leftSection={<IconBolt size={14} />}>Exceptions / Rework</Tabs.Tab>}
                             <Tabs.Tab value="actions" leftSection={<IconBolt size={14} />}>Actions</Tabs.Tab>
                             <Tabs.Tab value="routing" leftSection={<IconArrowsSplit size={14} />}>Routing/Branching</Tabs.Tab>
                             <Tabs.Tab value="hooks" leftSection={<IconPlug size={14} />}>Hooks</Tabs.Tab>
-                            {stageForm.values.isNestedWorkflow && <Tabs.Tab value="exceptions" leftSection={<IconBolt size={14} />}>Exceptions / Rework</Tabs.Tab>}
                         </Tabs.List>
 
                         <Tabs.Panel value="general">
@@ -467,7 +467,8 @@ function WorkflowEditor() {
                                     <SegmentedControl
                                         value={
                                             stageForm.values.isNestedWorkflow ? 'NESTED' :
-                                                stageForm.values.isRuleStage ? 'RULE' : 'USER'
+                                                stageForm.values.isRuleStage ? 'RULE' :
+                                                    stageForm.values.isServiceTask ? 'SERVICE' : 'USER'
                                         }
                                         onChange={(value) => {
                                             stageForm.setFieldValue('isNestedWorkflow', value === 'NESTED');
