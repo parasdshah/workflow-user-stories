@@ -25,4 +25,8 @@ public class StageAction {
     private String targetType;  // NEXT, SPECIFIC, END
     private String targetStage; // if SPECIFIC
     private String postActionStatus; // e.g. APPROVED, REJECTED
+
+    // Y.5 Rework Configuration
+    private String actionType; // COMPLETION (Default), ERROR_TRIGGER
+    private String errorCode; // e.g. REWORK_REQUIRED
 }

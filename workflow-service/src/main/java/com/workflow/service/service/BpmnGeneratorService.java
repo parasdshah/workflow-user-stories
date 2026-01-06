@@ -90,6 +90,37 @@ public class BpmnGeneratorService {
             FlowElement source = currentElement;
             FlowElement defaultTarget = getNextStageElement(stages, i, stageElements);
 
+            // Y.5 Exception Rules (Rework)
+            if (currentStage.getExceptionRules() != null && !currentStage.getExceptionRules().isBlank()) {
+                try {
+                    List<Map<String, String>> rules = objectMapper.readValue(currentStage.getExceptionRules(),
+                            new TypeReference<List<Map<String, String>>>() {
+                            });
+
+                    for (Map<String, String> rule : rules) {
+                        String errorCode = rule.get("errorCode");
+                        String targetCode = rule.get("targetStageCode");
+                        FlowElement targetEl = stageElements.get(targetCode);
+
+                        if (targetEl != null && currentElement instanceof Activity) {
+                            BoundaryEvent boundary = new BoundaryEvent();
+                            boundary.setId("catch_" + errorCode + "_" + currentStage.getStageCode());
+                            boundary.setAttachedToRef((Activity) currentElement);
+
+                            ErrorEventDefinition errorDef = new ErrorEventDefinition();
+                            errorDef.setErrorCode(errorCode);
+                            boundary.addEventDefinition(errorDef);
+
+                            process.addFlowElement(boundary);
+
+                            connect(process, boundary, targetEl);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to parse exception rules", e);
+                }
+            }
+
             // A. Routing Rules (Branching) or Actions (User Decisions)
             if ((currentStage.getRoutingRules() != null && !currentStage.getRoutingRules().isBlank())
                     || (currentStage.getActions() != null && !currentStage.getActions().isEmpty())) {
@@ -131,6 +162,22 @@ public class BpmnGeneratorService {
                         String condition = "${outcome == '" + action.getActionLabel() + "'}"; // Match frontend
                                                                                               // "outcome" variable
                         FlowElement targetEl = null;
+
+                        if ("ERROR_TRIGGER".equalsIgnoreCase(action.getActionType())) {
+                            EndEvent errorEnd = new EndEvent();
+                            errorEnd.setId("error_end_" + currentStage.getStageCode() + "_"
+                                    + action.getActionLabel().replaceAll("[^a-zA-Z0-9]", ""));
+
+                            ErrorEventDefinition errorDef = new ErrorEventDefinition();
+                            errorDef.setErrorCode(action.getErrorCode());
+                            errorEnd.addEventDefinition(errorDef);
+
+                            process.addFlowElement(errorEnd);
+
+                            SequenceFlow flow = connect(process, gateway, errorEnd);
+                            flow.setConditionExpression(condition);
+                            continue;
+                        }
 
                         if ("SPECIFIC".equalsIgnoreCase(action.getTargetType())) {
                             targetEl = stageElements.get(action.getTargetStage());
@@ -203,6 +250,7 @@ public class BpmnGeneratorService {
         if (stage.isNestedWorkflow()) {
             CallActivity callActivity = new CallActivity();
             callActivity.setCalledElement(stage.getNestedWorkflowCode());
+            callActivity.setInheritVariables(true); // Y.1 Cross-Process Data Persistence
             stageElement = callActivity;
         } else if (stage.isRuleStage()) {
             ServiceTask ruleTask = new ServiceTask();

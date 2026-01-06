@@ -15,6 +15,8 @@ interface StageAction {
     targetType: string;
     targetStage?: string;
     postActionStatus?: string;
+    actionType?: string; // COMPLETION, ERROR_TRIGGER
+    errorCode?: string; // REWORK_REQUIRED
 }
 
 interface StageConfig {
@@ -40,6 +42,8 @@ interface StageConfig {
     allowedActions?: string;
     routingRules?: string; // JSON string
     routingRulesList?: any[]; // UI only
+    exceptionRules?: string; // JSON String
+    exceptionRulesList?: any[]; // UI only
 }
 
 
@@ -94,7 +98,8 @@ function WorkflowEditor() {
             isServiceTask: false,
             delegateExpression: '',
             entryCondition: '',
-            routingRulesList: [] as { condition: string, targetStageCode: string }[]
+            routingRulesList: [] as { condition: string, targetStageCode: string }[],
+            exceptionRulesList: [] as { errorCode: string, targetStageCode: string }[]
         }
     });
 
@@ -150,7 +155,8 @@ function WorkflowEditor() {
             isServiceTask: (stage as any).isServiceTask || false,
             delegateExpression: (stage as any).delegateExpression || '',
             entryCondition: stage.entryCondition || '',
-            routingRulesList: stage.routingRules ? JSON.parse(stage.routingRules) : []
+            routingRulesList: stage.routingRules ? JSON.parse(stage.routingRules) : [],
+            exceptionRulesList: (stage as any).exceptionRules ? JSON.parse((stage as any).exceptionRules) : []
         });
         open();
     };
@@ -414,6 +420,7 @@ function WorkflowEditor() {
                             <Tabs.Tab value="actions" leftSection={<IconBolt size={14} />}>Actions</Tabs.Tab>
                             <Tabs.Tab value="routing" leftSection={<IconArrowsSplit size={14} />}>Routing/Branching</Tabs.Tab>
                             <Tabs.Tab value="hooks" leftSection={<IconPlug size={14} />}>Hooks</Tabs.Tab>
+                            {stageForm.values.isNestedWorkflow && <Tabs.Tab value="exceptions" leftSection={<IconBolt size={14} />}>Exceptions / Rework</Tabs.Tab>}
                         </Tabs.List>
 
                         <Tabs.Panel value="general">
@@ -528,66 +535,63 @@ function WorkflowEditor() {
                                     </Button>
                                 </Group>
 
-                                <Table verticalSpacing="xs">
-                                    <Table.Thead>
-                                        <Table.Tr>
-                                            <Table.Th>Label</Table.Th>
-                                            <Table.Th>Style</Table.Th>
-                                            <Table.Th>Target Type</Table.Th>
-                                            <Table.Th>Target Stage</Table.Th>
-                                            <Table.Th>Post-Status</Table.Th>
-                                            <Table.Th></Table.Th>
-                                        </Table.Tr>
-                                    </Table.Thead>
-                                    <Table.Tbody>
-                                        {stageForm.values.actions?.map((action, idx) => (
-                                            <Table.Tr key={idx}>
-                                                <Table.Td>
-                                                    <TextInput size="xs" {...stageForm.getInputProps(`actions.${idx}.actionLabel`)} />
-                                                </Table.Td>
-                                                <Table.Td>
-                                                    <Select
-                                                        size="xs"
-                                                        data={['primary', 'success', 'danger', 'warning', 'default']}
-                                                        {...stageForm.getInputProps(`actions.${idx}.buttonStyle`)}
-                                                    />
-                                                </Table.Td>
-                                                <Table.Td>
-                                                    <Select
-                                                        size="xs"
-                                                        data={['NEXT', 'SPECIFIC', 'END']}
-                                                        {...stageForm.getInputProps(`actions.${idx}.targetType`)}
-                                                    />
-                                                </Table.Td>
-                                                <Table.Td>
-                                                    {action.targetType === 'SPECIFIC' && (
-                                                        <Select
-                                                            size="xs"
-                                                            placeholder="Stage Code"
-                                                            data={stages.filter(s => s.stageCode !== stageForm.values.stageCode).map(s => s.stageCode)}
-                                                            {...stageForm.getInputProps(`actions.${idx}.targetStage`)}
-                                                        />
-                                                    )}
-                                                </Table.Td>
-                                                <Table.Td>
-                                                    <TextInput size="xs" placeholder="e.g. APPROVED" {...stageForm.getInputProps(`actions.${idx}.postActionStatus`)} />
-                                                </Table.Td>
-                                                <Table.Td>
-                                                    <ActionIcon color="red" onClick={() => stageForm.removeListItem('actions', idx)}>
-                                                        <IconTrash size={16} />
-                                                    </ActionIcon>
-                                                </Table.Td>
-                                            </Table.Tr>
-                                        ))}
-                                        {(!stageForm.values.actions || stageForm.values.actions.length === 0) && (
-                                            <Table.Tr>
-                                                <Table.Td colSpan={6} align="center">
-                                                    <Text size="xs" c="dimmed">No actions configured. Standard completion.</Text>
-                                                </Table.Td>
-                                            </Table.Tr>
-                                        )}
-                                    </Table.Tbody>
-                                </Table>
+                                {stageForm.values.actions?.map((action, idx) => (
+                                    <Paper key={idx} withBorder p="xs" mb="xs" bg="gray.0">
+                                        <Group justify="space-between" mb="xs">
+                                            <Text fw={500} size="sm">Action {idx + 1}</Text>
+                                            <ActionIcon color="red" size="sm" onClick={() => stageForm.removeListItem('actions', idx)}>
+                                                <IconTrash size={14} />
+                                            </ActionIcon>
+                                        </Group>
+                                        <SimpleGrid cols={2}>
+                                            <TextInput label="Label" size="xs" required {...stageForm.getInputProps(`actions.${idx}.actionLabel`)} />
+                                            <Select label="Style" size="xs" data={['primary', 'success', 'danger', 'warning', 'default']} {...stageForm.getInputProps(`actions.${idx}.buttonStyle`)} />
+
+                                            <Select
+                                                label="Action Type"
+                                                size="xs"
+                                                data={[
+                                                    { label: 'Standard Completion', value: 'COMPLETION' },
+                                                    { label: 'Trigger Error / Rework', value: 'ERROR_TRIGGER' }
+                                                ]}
+                                                {...stageForm.getInputProps(`actions.${idx}.actionType`)}
+                                            />
+
+                                            {stageForm.values.actions![idx].actionType === 'ERROR_TRIGGER' ? (
+                                                <TextInput
+                                                    label="Error Code"
+                                                    size="xs"
+                                                    placeholder="REWORK_REQUIRED"
+                                                    required
+                                                    {...stageForm.getInputProps(`actions.${idx}.errorCode`)}
+                                                />
+                                            ) : (
+                                                <Select
+                                                    label="Target Type"
+                                                    size="xs"
+                                                    data={['NEXT', 'SPECIFIC', 'END']}
+                                                    {...stageForm.getInputProps(`actions.${idx}.targetType`)}
+                                                />
+                                            )}
+
+                                            {stageForm.values.actions![idx].actionType !== 'ERROR_TRIGGER' && action.targetType === 'SPECIFIC' && (
+                                                <Select
+                                                    label="Target Stage"
+                                                    size="xs"
+                                                    data={stages.filter(s => s.stageCode !== stageForm.values.stageCode).map(s => s.stageCode)}
+                                                    {...stageForm.getInputProps(`actions.${idx}.targetStage`)}
+                                                />
+                                            )}
+
+                                            {stageForm.values.actions![idx].actionType !== 'ERROR_TRIGGER' && (
+                                                <TextInput label="Post-Status" size="xs" placeholder="APPROVED" {...stageForm.getInputProps(`actions.${idx}.postActionStatus`)} />
+                                            )}
+                                        </SimpleGrid>
+                                    </Paper>
+                                ))}
+                                {(!stageForm.values.actions || stageForm.values.actions.length === 0) && (
+                                    <Text size="xs" c="dimmed" ta="center" py="sm">No actions configured. Standard completion.</Text>
+                                )}
                             </Stack>
                         </Tabs.Panel>
 
@@ -647,13 +651,13 @@ function WorkflowEditor() {
                                 </Table>
                             </Stack>
                         </Tabs.Panel>
-                    </Tabs>
+                    </Tabs >
 
                     <Button type="submit" mt="md" fullWidth>{editingIndex !== null ? "Update Stage" : "Add Stage"}</Button>
-                </form>
-            </Modal>
+                </form >
+            </Modal >
 
-        </Container>
+        </Container >
     );
 }
 

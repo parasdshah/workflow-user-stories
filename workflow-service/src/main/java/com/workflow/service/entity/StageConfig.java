@@ -67,6 +67,10 @@ public class StageConfig {
     @Column(columnDefinition = "TEXT")
     private String routingRules; // JSON Structure for branching logic
 
+    // Y.5 Rework Configuration (Parent-side)
+    @Column(columnDefinition = "TEXT")
+    private String exceptionRules; // JSON List of {errorCode, targetStageCode}
+
     public boolean isRuleStage() {
         return Boolean.TRUE.equals(this.isRuleStage);
     }
