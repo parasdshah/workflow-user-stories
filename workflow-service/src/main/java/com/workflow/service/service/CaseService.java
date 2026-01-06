@@ -26,6 +26,8 @@ import java.util.*;
 @Slf4j
 public class CaseService {
 
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final WorkflowDefinitionService workflowDefinitionService;
     private final RuntimeService runtimeService;
     private final RepositoryService repositoryService;
     private final HistoryService historyService;
@@ -374,6 +376,75 @@ public class CaseService {
         dto.setSubProcessInstanceId(activity.getCalledProcessInstanceId());
 
         return dto;
+    }
+
+    public com.workflow.service.dto.GraphDTO getCaseGlobalGraph(String caseId) {
+        // 1. Get Case to find Root Workflow
+        CaseDTO caseDetails = getCaseDetails(caseId);
+        String rootWorkflowCode = caseDetails.getWorkflowCode();
+
+        // 2. Get Static Graph
+        com.workflow.service.dto.GraphDTO graph = workflowDefinitionService.getGlobalGraph(rootWorkflowCode);
+
+        // 3. Collect Runtime Status
+        // Map<NodeID, Status>
+        Map<String, String> statusMap = new HashMap<>();
+        collectRuntimeStatus(caseId, rootWorkflowCode, statusMap);
+
+        // 4. Enrich Graph Nodes
+        for (com.workflow.service.dto.GraphDTO.NodeDTO node : graph.getNodes()) {
+            // Calculate status
+            // Default to PENDING/FUTURE if not in map
+            String status = statusMap.getOrDefault(node.getId(), "PENDING");
+
+            // Enrich Data
+            Object originalData = node.getData();
+            Map<String, Object> newData;
+            if (originalData != null) {
+                try {
+                    newData = objectMapper.convertValue(originalData,
+                            new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
+                            });
+                } catch (Exception e) {
+                    newData = new HashMap<>();
+                    log.warn("Failed to convert node data to map", e);
+                }
+            } else {
+                newData = new HashMap<>();
+            }
+
+            newData.put("status", status);
+            node.setData(newData);
+        }
+
+        return graph;
+    }
+
+    private void collectRuntimeStatus(String processInstanceId, String prefix, Map<String, String> statusMap) {
+        // Query History for all activities in this process instance
+        List<HistoricActivityInstance> activities = historyService.createHistoricActivityInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .list();
+
+        for (HistoricActivityInstance activity : activities) {
+            // Mapping: Graph Node ID = Prefix + "_" + ActivityID (StageCode)
+            // But wait, BPMN Activity ID = StageCode.
+            // So:
+            String nodeId = prefix + "_" + activity.getActivityId();
+
+            String status = (activity.getEndTime() != null) ? "COMPLETED" : "ACTIVE";
+            statusMap.put(nodeId, status);
+
+            // Recurse for Call Activities
+            if ("callActivity".equals(activity.getActivityType()) && activity.getCalledProcessInstanceId() != null) {
+                // The Call Activity itself is "Active" or "Completed" in the parent.
+                // But we also need to fill the children nodes.
+                // The children nodes use the CallActivity's NodeID (Group Node ID) as their
+                // prefix.
+                // The Group Node ID IS `nodeId` calculated above.
+                collectRuntimeStatus(activity.getCalledProcessInstanceId(), nodeId, statusMap);
+            }
+        }
     }
 
     private StageDTO mapCommonTaskInfo(String name, String code, String assignee, Date createTime, Date dueDate,

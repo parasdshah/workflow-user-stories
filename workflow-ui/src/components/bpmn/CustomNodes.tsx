@@ -2,6 +2,12 @@ import { Handle, Position, type NodeProps } from 'reactflow';
 import { Paper, Text, Group, ThemeIcon, RingProgress, Center, Stack } from '@mantine/core';
 import { IconUser, IconSettings, IconArrowRight, IconGitBranch, IconCheck, IconClock } from '@tabler/icons-react';
 
+const getStatusStyle = (status: string | undefined, defaultColor: string) => {
+    if (status === 'COMPLETED') return { borderColor: '#40c057', borderWidth: 3, backgroundColor: '#ebfbee' };
+    if (status === 'ACTIVE') return { borderColor: '#1971c2', borderWidth: 4, backgroundColor: '#e7f5ff', boxShadow: '0 0 10px rgba(25, 113, 194, 0.5)' };
+    return { borderColor: defaultColor, borderWidth: 2 };
+};
+
 // Start Event Node (Circle)
 export function BPMNStartNode({ data }: NodeProps) {
     return (
@@ -50,10 +56,11 @@ export function BPMNEndNode({ data }: NodeProps) {
 
 // User Task Node (Rounded Rect with User Icon)
 export function BPMNUserTaskNode({ data }: NodeProps) {
+    const style = getStatusStyle(data.status, '#228be6');
     return (
         <>
             <Handle type="target" position={Position.Left} />
-            <Paper withBorder p="xs" radius="md" shadow="xs" w={150} style={{ borderColor: '#228be6', borderWidth: 2 }}>
+            <Paper withBorder p="xs" radius="md" shadow="xs" w={150} style={style}>
                 <Group wrap="nowrap" gap="xs">
                     <ThemeIcon color="blue" variant="light" size="md">
                         <IconUser size={16} />
@@ -82,10 +89,11 @@ export function BPMNUserTaskNode({ data }: NodeProps) {
 
 // Service Task Node (Rounded Rect with Gear Icon)
 export function BPMNServiceTaskNode({ data }: NodeProps) {
+    const style = getStatusStyle(data.status, '#fab005');
     return (
         <>
             <Handle type="target" position={Position.Left} />
-            <Paper withBorder p="xs" radius="md" shadow="xs" w={150} style={{ borderColor: '#fab005', borderWidth: 2 }}>
+            <Paper withBorder p="xs" radius="md" shadow="xs" w={150} style={style}>
                 <Group wrap="nowrap" gap="xs">
                     <ThemeIcon color="yellow" variant="light" size="md">
                         <IconSettings size={16} />
@@ -106,10 +114,14 @@ export function BPMNServiceTaskNode({ data }: NodeProps) {
 
 // Call Activity (Nested Workflow)
 export function BPMNCallActivityNode({ data }: NodeProps) {
+    const style = getStatusStyle(data.status, '#7950f2');
+    // For Call Activity, borderWidth default was 4. But getStatusStyle overwrites it. 
+    // If not active/completed, we want borderWidth 4? Or logic consistent.
+    // If we want default 4, let's just accept 2 as standard "inactive" look.
     return (
         <>
             <Handle type="target" position={Position.Left} />
-            <Paper withBorder p="xs" radius="md" shadow="xs" w={150} style={{ borderColor: '#7950f2', borderWidth: 4 }}>
+            <Paper withBorder p="xs" radius="md" shadow="xs" w={150} style={style}>
                 <Group wrap="nowrap" gap="xs">
                     <ThemeIcon color="violet" variant="light" size="md">
                         <IconGitBranch size={16} />

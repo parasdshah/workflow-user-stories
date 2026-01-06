@@ -29,7 +29,8 @@ interface GraphDTO {
 }
 
 interface Props {
-    workflowCode: string;
+    workflowCode?: string;
+    caseId?: string;
 }
 
 const nodeTypes = {
@@ -42,15 +43,15 @@ const nodeTypes = {
     bpmnGroup: BPMNGroupNode
 };
 
-export function GlobalProcessVisualizer({ workflowCode }: Props) {
+export function GlobalProcessVisualizer({ workflowCode, caseId }: Props) {
     return (
         <ReactFlowProvider>
-            <GlobalCanvas workflowCode={workflowCode} />
+            <GlobalCanvas workflowCode={workflowCode} caseId={caseId} />
         </ReactFlowProvider>
     );
 }
 
-function GlobalCanvas({ workflowCode }: Props) {
+function GlobalCanvas({ workflowCode, caseId }: Props) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -61,7 +62,16 @@ function GlobalCanvas({ workflowCode }: Props) {
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch(`/api/workflows/${workflowCode}/global-graph`);
+            let url = '';
+            if (caseId) {
+                url = `/api/runtime/cases/${caseId}/global-graph`;
+            } else if (workflowCode) {
+                url = `/api/workflows/${workflowCode}/global-graph`;
+            } else {
+                return;
+            }
+
+            const res = await fetch(url);
             if (!res.ok) throw new Error("Failed to fetch graph");
             const data: GraphDTO = await res.json();
 

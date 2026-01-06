@@ -112,4 +112,12 @@ public class CaseController {
             return ResponseEntity.internalServerError().body("Error completing task: " + e.getMessage());
         }
     }
+
+    @Operation(summary = "Get global runtime graph", description = "Retrieves the global process map with runtime status for a specific case")
+    @ApiResponse(responseCode = "200", description = "Successfully retrieved global graph")
+    @GetMapping("/{id}/global-graph")
+    public ResponseEntity<com.workflow.service.dto.GraphDTO> getCaseGlobalGraph(
+            @Parameter(description = "Case ID") @PathVariable String id) {
+        return ResponseEntity.ok(caseService.getCaseGlobalGraph(id));
+    }
 }

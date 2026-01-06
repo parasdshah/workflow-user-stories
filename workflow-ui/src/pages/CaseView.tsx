@@ -1,7 +1,9 @@
-import { Container, Title, Paper, Group, Text, Grid, Badge, Loader, Button, Code, Stack } from '@mantine/core';
+import { Container, Title, Paper, Group, Text, Grid, Badge, Loader, Button, Code, Stack, Tabs } from '@mantine/core';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { CaseTimeline } from '../components/cases/CaseTimeline';
+import { GlobalProcessVisualizer } from '../components/bpmn/GlobalProcessVisualizer';
+import { IconList, IconMap } from '@tabler/icons-react';
 
 interface CaseDTO {
     caseId: string;
@@ -151,7 +153,20 @@ export default function CaseView() {
                 </Grid.Col>
 
                 <Grid.Col span={8}>
-                    <CaseTimeline stages={stages} onAction={handleTaskAction} />
+                    <Tabs defaultValue="timeline">
+                        <Tabs.List>
+                            <Tabs.Tab value="timeline" leftSection={<IconList size={14} />}>Timeline</Tabs.Tab>
+                            <Tabs.Tab value="map" leftSection={<IconMap size={14} />}>Global Process Map</Tabs.Tab>
+                        </Tabs.List>
+
+                        <Tabs.Panel value="timeline" pt="xs">
+                            <CaseTimeline stages={stages} onAction={handleTaskAction} />
+                        </Tabs.Panel>
+
+                        <Tabs.Panel value="map" pt="xs">
+                            <GlobalProcessVisualizer caseId={id} />
+                        </Tabs.Panel>
+                    </Tabs>
                 </Grid.Col>
             </Grid>
         </Container>
