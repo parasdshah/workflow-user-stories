@@ -442,7 +442,9 @@ function WorkflowEditor() {
                             <Tabs.Tab value="general" leftSection={<IconInfoCircle size={14} />}>General</Tabs.Tab>
                             <Tabs.Tab value="config" leftSection={<IconSettings size={14} />}>Configuration</Tabs.Tab>
                             {stageForm.values.isNestedWorkflow && <Tabs.Tab value="exceptions" leftSection={<IconBolt size={14} />}>Exceptions / Rework</Tabs.Tab>}
-                            <Tabs.Tab value="actions" leftSection={<IconBolt size={14} />}>Actions</Tabs.Tab>
+                            {!stageForm.values.isNestedWorkflow && !stageForm.values.isRuleStage && !stageForm.values.isServiceTask && (
+                                <Tabs.Tab value="actions" leftSection={<IconBolt size={14} />}>Actions</Tabs.Tab>
+                            )}
                             <Tabs.Tab value="routing" leftSection={<IconArrowsSplit size={14} />}>Routing/Branching</Tabs.Tab>
                             <Tabs.Tab value="hooks" leftSection={<IconPlug size={14} />}>Hooks</Tabs.Tab>
                         </Tabs.List>
@@ -477,6 +479,11 @@ function WorkflowEditor() {
                                             if (value !== 'NESTED') stageForm.setFieldValue('nestedWorkflowCode', '');
                                             if (value !== 'RULE') stageForm.setFieldValue('ruleKey', '');
                                             if (value !== 'SERVICE') stageForm.setFieldValue('delegateExpression', '');
+
+                                            // Actions are only valid for USER tasks. Clear them for others to avoid bugs.
+                                            if (value !== 'USER') {
+                                                stageForm.setFieldValue('actions', []);
+                                            }
                                         }}
                                         data={[
                                             { label: 'User Task', value: 'USER' },
