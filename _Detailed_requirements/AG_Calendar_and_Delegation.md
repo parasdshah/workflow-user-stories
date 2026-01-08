@@ -12,14 +12,22 @@ To ensure workflows respect time-off, both at an organizational level (Holidays)
 ### 2.1 Data Model
 New entities are required to store calendar and leave data.
 
+> [!NOTE]
+> **Architectural Decision: Persistence vs. External Fetch**
+> Unlike User Data (which changes often and is complex), **Holiday Data** is static (changes once a year) but accessed frequently (every SLA calculation loop).
+> *   **Recommendation**: **Persist Locally** in Workflow Service.
+> *   **Reasoning**: Real-time fetching for every date in a 10-day SLA calculation is too slow and risky.
+> *   **Sync Strategy**: Provide an API `POST /api/calendars/import` to allow the External Adapter to push holiday updates to the Workflow Service annually or on change.
+
 **Entity: `OrgHoliday`**
 ```java
 @Entity
 public class OrgHoliday {
     @Id private Long id;
     private LocalDate date;
-    private String description; // e.g., "New Year's Day"
-    private String region; // Optional: "US", "IN", "EU" (if multi-region)
+    private String description; 
+    @Column(nullable = false)
+    private String region; // "US", "IN", "APAC", "GLOBAL"
 }
 ```
 
@@ -31,16 +39,21 @@ public class UserLeave {
     private String userId;
     private LocalDateTime fromDate;
     private LocalDateTime toDate;
-    private String substituteUserId; // Who gets the tasks?
+    private String substituteUserId; 
     private boolean active;
 }
 ```
 
-### 2.2 Service Layer: `CalendarService`
-A central service to query availability.
-*   `boolean isHoliday(LocalDate date)`
+### 2.2 Service Layer: `CalendarService` & `UserContext`
+A central service to query availability, requiring **Regional Context**.
+*   `boolean isHoliday(LocalDate date, String region)`
 *   `UserLeave getActiveLeave(String userId)`
-*   `LocalDate calculateSlaDueDate(LocalDate startDate, int durationDays)` (Skips holidays)
+*   `LocalDate calculateSlaDueDate(LocalDate startDate, int durationDays, String region)`
+
+**User Home Location Lookup**:
+To know *which* region to apply, we fetch the User's profile from the **External User Adapter** (Design AH).
+*   `UserContext context = userAdapter.getContext(userId);`
+*   `String homeRegion = context.getRegion();` // e.g., "IN"
 
 ---
 
