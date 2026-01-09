@@ -1,0 +1,105 @@
+@startuml Workflow_Definition_Deployment
+title 1. Workflow Definition & Deployment
+
+actor "Business Analyst" as BA
+participant "Workflow UI" as UI
+participant "WorkflowController" as WC
+participant "WorkflowDefinitionService" as WDS
+participant "BpmnGeneratorService" as BGS
+database "Database (StageConfig)" as DB
+participant "Flowable Engine" as ENG
+
+note over BA, ENG: Phase 1: Configuration
+
+BA -> UI: Create "Loan Approval" Workflow
+UI -> WC: POST /api/workflows
+WC -> WDS: createWorkflow()
+WDS -> DB: Save WorkflowMaster
+DB --> WDS: Ack
+WDS --> WC: WorkflowId
+WC --> UI: Success
+
+BA -> UI: Add Stages (Validation, Approval)
+UI -> WC: POST /api/workflows/{id}/stages
+WC -> WDS: saveStage()
+WDS -> DB: Save StageConfig
+DB --> WDS: Ack
+WDS --> WC: Success
+
+note over BA, ENG: Phase 2: Deployment
+
+BA -> UI: Click "Publish/Deploy"
+UI -> WC: POST /api/deployments/{id}/deploy
+WC -> DS: DeploymentService.deploy()
+DS -> DB: Fetch All StageConfigs (Sorted)
+DB --> DS: List<StageConfig>
+DS -> BGS: generateBpmnXml(stages)
+
+note right of BGS
+  1. Create Process & Start Event
+  2. Iterate Stages -> Create UserTasks/ServiceTasks
+  3. Connect Edges (Flows)
+  4. Apply Hooks (Listeners)
+  5. Auto Layout
+end note
+
+BGS --> DS: BPMN XML String
+DS -> ENG: repositoryService.createDeployment().addString(xml).deploy()
+ENG --> DS: DeploymentId
+DS -> DB: Update WorkflowMaster (status=ACTIVE)
+DS --> WC: Success
+WC --> UI: "Deployed Successfully"
+@enduml
+
+@startuml Case_Initiation_Execution
+title 2. Case Initiation & Execution
+
+actor "End User" as User
+participant "Client App" as App
+participant "CaseController" as CC
+participant "CaseService" as CS
+participant "Flowable Engine" as ENG
+database "Flowable DB" as DB
+
+note over User, DB: Start Case
+
+User -> App: "Start Loan Application"
+App -> CC: POST /api/cases/start (workflow=LOAN)
+CC -> CS: startCase(workflowCode, data)
+CS -> ENG: runtimeService.startProcessInstanceByKey(LOAN, data)
+ENG -> DB: Create Process Instance
+ENG -> DB: Create First Task (Stage 1)
+ENG --> CS: ProcessInstance
+CS --> CC: CaseId
+CC --> App: CaseId: 101
+
+note over User, DB: Complete Task
+
+User -> App: Complete "Validation" Task
+App -> CC: POST /api/cases/{id}/tasks/complete
+CC -> CS: completeTask(taskId, outcome)
+CS -> ENG: taskService.complete(taskId, vars)
+
+group Flowable Internal Execution
+    note right of ENG: Flowable Internal Execution
+    ENG -> DB: Update Task (Completed)
+    ENG -> ENG: Evaluate Outgoing Sequence Flows
+    ENG -> ENG: Check Conditions (${outcome}=='APPROVE')
+    ENG -> DB: Create Next Task (Stage 2)
+    note right of ENG: Fire TaskListeners (Hooks)
+end
+
+CS --> CC: Success
+CC --> App: "Task Completed"
+
+note over User, DB: View Progress
+
+User -> App: View Timeline
+App -> CC: GET /api/runtime/cases/{id}/stages
+CC -> CS: getStages(caseId)
+CS -> DB: Query HistoricActivityInstances
+DB --> CS: List<History>
+CS -> CS: Map to StageDTO
+CS --> CC: JSON Response
+CC --> App: Render Timeline UI
+@enduml
