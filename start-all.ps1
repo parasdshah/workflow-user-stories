@@ -20,6 +20,11 @@ Write-Host "Starting Workflow Service..."
 Start-Process -FilePath "java" -ArgumentList "-Dloader.path=workflow-delegates/target/workflow-delegates-1.0.0-SNAPSHOT.jar -jar workflow-service/target/workflow-service-1.0.0-SNAPSHOT.jar" -NoNewWindow
 Start-Sleep -Seconds 15
 
+# Start HRMS Service
+Write-Host "Starting HRMS Service..."
+Start-Process -FilePath "java" -ArgumentList "-jar hrms-service/target/hrms-service-1.0.0-SNAPSHOT.jar" -NoNewWindow
+Start-Sleep -Seconds 10
+
 # Start Frontend
 Write-Host "Starting Frontend..."
 Set-Location workflow-ui

@@ -1,0 +1,71 @@
+@startuml Matrix_User_Resolution
+title 1. Matrix User Resolution Flow (Runtime)
+
+participant "Workflow Service" as WF
+participant "HRMS API\n(MatrixController)" as API
+participant "MatrixResolutionService" as SVC
+participant "MatrixAssignmentRepo" as REPO
+participant "RegionRepo" as REG
+database "HRMS Database" as DB
+
+note over WF, DB: Workflow Needs an Approver
+
+WF -> API: POST /api/matrix/resolve
+note right of WF
+  Payload: 
+  { 
+    role: "APPROVER",
+    region: "Mumbai",
+    product: "Home Loan",
+    amount: 50000 
+  }
+end note
+
+API -> SVC: findUsers(criteria)
+
+group Step 1: Expand Region Hierarchy
+    SVC -> REG: findByRegionName("Mumbai")
+    REG --> SVC: Region Entity (Path: /1/5/20/50/)
+    SVC -> SVC: Identify Parents: [Mumbai, India, APAC, Global]
+end
+
+group Step 2: Query Matrix Table
+    SVC -> REPO: findByRoleAndScope(Role, RegionList, Product)
+    REPO -> DB: SELECT * FROM Matrix WHERE...
+    DB --> REPO: List<Assignment>
+    REPO --> SVC: [UserA(Mumbai), UserB(India)]
+end
+
+group Step 3: Business Logic
+    SVC -> SVC: Filter(User.Limit >= 50000)
+    SVC -> SVC: Sort by Region Granularity\n(Prefer Mumbai over India)
+end
+
+SVC --> API: Result: UserA
+API --> WF: { userId: "UserA", email: "..." }
+@enduml
+
+@startuml Data_Seeding
+title 2. Reference Data Sync / Seeding
+
+actor Admin
+participant "HRMS API\n(SeedController)" as API
+participant "HrmsDataSeeder" as SD
+database "HRMS Database" as DB
+
+Admin -> API: POST /api/seed/reset
+API -> SD: run()
+SD -> DB: Check Existing Count
+
+alt Empty DB
+    SD -> DB: Insert Regions (Tree)
+    SD -> DB: Insert Business Segments
+    SD -> DB: Insert Roles & Products
+    SD -> DB: Generate 50 Employees
+    SD -> DB: Insert Matrix Assignments
+else Data Exists
+    SD --> API: Skip
+end
+
+API --> Admin: "Seeding Completed"
+@enduml

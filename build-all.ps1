@@ -19,7 +19,8 @@ function Run-Build($path, $command, $argsList) {
             Write-Error "Build failed in $path"
             exit 1
         }
-    } finally {
+    }
+    finally {
         Pop-Location
     }
 }
@@ -33,6 +34,7 @@ Run-Build "api-gateway" "mvn" "clean install -DskipTests"
 # 3. Workflow Service
 Run-Build "workflow-delegates" "mvn" "clean install -DskipTests"
 Run-Build "workflow-service" "mvn" "clean install -DskipTests"
+Run-Build "hrms-service" "mvn" "clean install -DskipTests"
 
 # 4. Frontend
 Write-Host "Building dependencies and project in workflow-ui..."
@@ -47,7 +49,8 @@ try {
     Write-Host "Running npm run build..."
     npm run build
     if ($LASTEXITCODE -ne 0) { throw "npm run build failed" }
-} finally {
+}
+finally {
     Pop-Location
 }
 

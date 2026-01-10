@@ -20,6 +20,7 @@
         <module>api-gateway</module>
         <module>workflow-service</module>
         <module>workflow-delegates</module>
+        <module>hrms-service</module>
     </modules>
 
     <properties>
