@@ -78,7 +78,8 @@ Functional definitions, not people.
 *   **Columns**:
     *   `role_code` (PK) (e.g., "CREDIT_MGR", "SALES_EXEC")
     *   `role_name`
-    *   `base_authority_limit` (Default approval limit, can be overridden).
+    *   `base_authority_limit` (Decimal)
+    *   `base_currency` (String, e.g. "USD")
 
 ---
 
@@ -95,7 +96,9 @@ This is the most critical table. It maps People to Roles within a specific Conte
     *   `scope_segment_id` (FK) - *Nullable. If NULL, applies to ALL segments.*
     *   `scope_product_id` (FK) - *Nullable. If NULL, applies to ALL products.*
     *   `reporting_manager_id` (FK) - *Specific supervisor for this assignment.*
-    *   `approval_limit` (Decimal) - *Specific limit for this matrix position.*
+    *   `approval_limit` (Decimal) - *Specific limit value.*
+    *   `currency_code` (String) - *e.g. "USD", "INR".*
+    *   `denomination` (String) - *e.g. "ACTUALS", "LAKHS", "MILLIONS".*
 
 **Why this is powerful:**
 1.  **Dual Hats**: Alice can be "Regional Head" for "Retail" (High Limit) AND "Acting Manager" for "SME" (Low Limit). Two rows in this table.
@@ -142,6 +145,8 @@ erDiagram
     Employee_Matrix_Assignment {
         string assignment_id PK
         decimal approval_limit
+        string currency_code
+        string denomination
         string reporting_manager_id FK
     }
 ```
