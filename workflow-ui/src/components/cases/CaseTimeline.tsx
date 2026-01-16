@@ -141,6 +141,25 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
         setPendingAction(null);
     };
 
+    const [userMap, setUserMap] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+        const uniqueAssignees = Array.from(new Set(stages.map(s => s.assignee).filter(Boolean)));
+
+        uniqueAssignees.forEach(async (userId) => {
+            if (!userId || userMap[userId]) return;
+            try {
+                const res = await fetch(`/api/adapter/users/${userId}/attributes`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setUserMap(prev => ({ ...prev, [userId!]: data.fullName }));
+                }
+            } catch (e) {
+                console.error("Failed to resolve user name for", userId);
+            }
+        });
+    }, [stages]);
+
     return (
         <Card withBorder padding="xl" radius="md">
             <Text size="lg" fw={500} mb="xl">Case Progress</Text>
@@ -173,7 +192,7 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
                         })()}
 
                         <Text c="dimmed" size="sm">
-                            Assignee: {stage.assignee || 'Unassigned'}
+                            Assignee: {stage.assignee ? (userMap[stage.assignee] ? `${userMap[stage.assignee]} (${stage.assignee})` : stage.assignee) : 'Unassigned'}
                         </Text>
                         <Text size="xs" mt={4}>
                             Created: {stage.createdTime ? new Date(stage.createdTime).toLocaleString() : '-'}

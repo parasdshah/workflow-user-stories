@@ -35,6 +35,9 @@ function Header() {
                         <Button variant="subtle" leftSection={<IconList size={16} />} onClick={() => navigate('/modules')}>
                             Modules
                         </Button>
+                        <Button variant="subtle" leftSection={<IconList size={16} />} onClick={() => navigate('/admin/hrms')}>
+                            HRMS Console
+                        </Button>
                     </Group>
                 </Group>
 

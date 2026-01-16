@@ -71,6 +71,10 @@ public class StageConfig {
     @Column(columnDefinition = "TEXT")
     private String exceptionRules; // JSON List of {errorCode, targetStageCode}
 
+    // AF. Simplified Assignment Configuration
+    @Column(columnDefinition = "TEXT")
+    private String assignmentRules; // JSON Structure for Assignment Logic
+
     public boolean isRuleStage() {
         return Boolean.TRUE.equals(this.isRuleStage);
     }

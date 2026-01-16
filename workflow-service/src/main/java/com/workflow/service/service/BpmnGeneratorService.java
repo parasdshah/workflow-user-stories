@@ -10,6 +10,9 @@ import org.flowable.bpmn.converter.BpmnXMLConverter;
 import org.flowable.bpmn.model.*;
 import org.flowable.bpmn.model.Process;
 import org.flowable.bpmn.BpmnAutoLayout;
+import org.flowable.bpmn.model.FlowableListener;
+import org.flowable.bpmn.model.FieldExtension;
+import org.flowable.bpmn.model.ImplementationType;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -264,6 +267,51 @@ public class BpmnGeneratorService {
             UserTask userTask = new UserTask();
             String formKey = getFormKeyForStage(stage.getStageCode());
             userTask.setFormKey(formKey);
+            
+            // AF. Simplified Assignment Logic
+            if (stage.getAssignmentRules() != null && !stage.getAssignmentRules().isBlank()) {
+                try {
+                    Map<String, Object> rules = objectMapper.readValue(stage.getAssignmentRules(), new TypeReference<Map<String, Object>>() {});
+                    String mechanism = (String) rules.get("mechanism");
+                    
+                    if ("GROUP_QUEUE".equals(mechanism)) {
+                        String group = (String) rules.get("groupName");
+                        if (group != null) userTask.setCandidateGroups(List.of(group));
+                    } else if ("ROUND_ROBIN".equals(mechanism)) {
+                        // Frontend sends "groupName" for the pool, but earlier logic might have expected "roundRobinPool"
+                        String pool = (String) rules.getOrDefault("roundRobinPool", rules.get("groupName"));
+                        
+                        // Add Listener to handle Round Robin at runtime
+                        FlowableListener listener = new FlowableListener();
+                        listener.setImplementationType(ImplementationType.IMPLEMENTATION_TYPE_DELEGATEEXPRESSION);
+                        listener.setImplementation("${roundRobinAssignmentListener}");
+                        listener.setEvent("create");
+                        // Pass configuration as field extensions
+                        FieldExtension poolField = new FieldExtension();
+                        poolField.setFieldName("pool");
+                        poolField.setStringValue(pool);
+                        listener.setFieldExtensions(List.of(poolField));
+                        userTask.setTaskListeners(new java.util.ArrayList<>(List.of(listener)));
+                    } else if ("MATRIX_RULE".equals(mechanism)) {
+                        // Matrix Logic via Listener
+                         FlowableListener listener = new FlowableListener();
+                        listener.setImplementationType(ImplementationType.IMPLEMENTATION_TYPE_DELEGATEEXPRESSION);
+                        listener.setImplementation("${matrixAssignmentListener}");
+                        listener.setEvent("create");
+                        
+                        // Pass role and other params
+                         FieldExtension roleField = new FieldExtension();
+                        roleField.setFieldName("role");
+                        roleField.setStringValue((String) rules.get("matrixRole"));
+                        listener.setFieldExtensions(List.of(roleField));
+                        
+                        userTask.setTaskListeners(new java.util.ArrayList<>(List.of(listener)));
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to parse assignment rules for stage " + stage.getStageCode(), e);
+                }
+            }
+            
             stageElement = userTask;
         }
 

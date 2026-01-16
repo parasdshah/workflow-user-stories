@@ -11,6 +11,7 @@ import CaseView from './pages/CaseView';
 import AuditLog from './pages/AuditLog';
 import RuleManagement from './pages/RuleManagement';
 import ModuleMaster from './pages/ModuleMaster';
+import { HrmsConsole } from './pages/HrmsConsole';
 import Header from './components/Header';
 
 function App() {
@@ -31,6 +32,7 @@ function App() {
           <Route path="/audit" element={<AuditLog />} />
           <Route path="/rules" element={<RuleManagement />} />
           <Route path="/modules" element={<ModuleMaster />} />
+          <Route path="/admin/hrms" element={<HrmsConsole />} />
         </Routes>
       </BrowserRouter>
     </MantineProvider>

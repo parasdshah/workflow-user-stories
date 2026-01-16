@@ -1,5 +1,5 @@
 import { Container, Title, Button, TextInput, Group, Stack, Paper, Select, NumberInput, Modal, Table, ActionIcon, SimpleGrid, Tabs, SegmentedControl, Text, Code, Badge } from '@mantine/core';
-import { IconEdit, IconTrash, IconGitBranch, IconUser, IconSettings, IconGavel, IconArrowsSplit, IconSitemap, IconInfoCircle, IconBolt, IconPlug, IconWorld } from '@tabler/icons-react';
+import { IconEdit, IconTrash, IconGitBranch, IconUser, IconSettings, IconGavel, IconArrowsSplit, IconSitemap, IconInfoCircle, IconBolt, IconPlug, IconWorld, IconUsers } from '@tabler/icons-react';
 import { useForm } from '@mantine/form';
 import { useDisclosure } from '@mantine/hooks';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -7,6 +7,8 @@ import { useState, useEffect } from 'react';
 import { BpmnVisualizer } from '../components/bpmn/BpmnVisualizer';
 import { FlowchartVisualizer } from '../components/bpmn/FlowchartVisualizer';
 import { GlobalProcessVisualizer } from '../components/bpmn/GlobalProcessVisualizer';
+import { AssignmentBuilder } from '../components/assignment/AssignmentBuilder';
+
 interface StageAction {
     id?: number;
     actionLabel: string;
@@ -43,6 +45,7 @@ interface StageConfig {
     routingRulesList?: any[]; // UI only
     exceptionRules?: string; // JSON String
     exceptionRulesList?: any[]; // UI only
+    assignmentRules?: string; // JSON String
 }
 
 
@@ -109,7 +112,8 @@ function WorkflowEditor() {
             delegateExpression: '',
             entryCondition: '',
             routingRulesList: [] as { condition: string, targetStageCode: string }[],
-            exceptionRulesList: [] as { errorCode: string, targetStageCode: string }[]
+            exceptionRulesList: [] as { errorCode: string, targetStageCode: string }[],
+            assignmentRules: ''
         }
     });
 
@@ -168,7 +172,8 @@ function WorkflowEditor() {
             delegateExpression: (stage as any).delegateExpression || '',
             entryCondition: stage.entryCondition || '',
             routingRulesList: safeParse(stage.routingRules),
-            exceptionRulesList: safeParse((stage as any).exceptionRules)
+            exceptionRulesList: safeParse((stage as any).exceptionRules),
+            assignmentRules: (stage as any).assignmentRules || ''
         });
         open();
     };
@@ -441,11 +446,15 @@ function WorkflowEditor() {
                         <Tabs.List mb="md">
                             <Tabs.Tab value="general" leftSection={<IconInfoCircle size={14} />}>General</Tabs.Tab>
                             <Tabs.Tab value="config" leftSection={<IconSettings size={14} />}>Configuration</Tabs.Tab>
+                            {!stageForm.values.isNestedWorkflow && !stageForm.values.isRuleStage && !stageForm.values.isServiceTask && (
+                                <Tabs.Tab value="assignment" leftSection={<IconUsers size={14} />}>Assignment</Tabs.Tab>
+                            )}
                             {stageForm.values.isNestedWorkflow && <Tabs.Tab value="exceptions" leftSection={<IconBolt size={14} />}>Exceptions / Rework</Tabs.Tab>}
                             {!stageForm.values.isNestedWorkflow && !stageForm.values.isRuleStage && !stageForm.values.isServiceTask && (
                                 <Tabs.Tab value="actions" leftSection={<IconBolt size={14} />}>Actions</Tabs.Tab>
                             )}
                             <Tabs.Tab value="routing" leftSection={<IconArrowsSplit size={14} />}>Routing/Branching</Tabs.Tab>
+
                             <Tabs.Tab value="hooks" leftSection={<IconPlug size={14} />}>Hooks</Tabs.Tab>
                         </Tabs.List>
 
@@ -739,6 +748,12 @@ function WorkflowEditor() {
                                     </Table.Tbody>
                                 </Table>
                             </Stack>
+                        </Tabs.Panel>
+                        <Tabs.Panel value="assignment">
+                            <AssignmentBuilder
+                                value={stageForm.values.assignmentRules}
+                                onChange={(val) => stageForm.setFieldValue('assignmentRules', val)}
+                            />
                         </Tabs.Panel>
                     </Tabs>
 

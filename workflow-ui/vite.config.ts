@@ -6,6 +6,14 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
+      '/api/hrms': {
+        target: 'http://localhost:8090',
+        changeOrigin: true,
+      },
+      '/api/adapter': {
+        target: 'http://localhost:8090',
+        changeOrigin: true,
+      },
       '/api': {
         target: 'http://localhost:8081',
         changeOrigin: true,

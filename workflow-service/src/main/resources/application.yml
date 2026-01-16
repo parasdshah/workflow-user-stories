@@ -39,6 +39,8 @@ management:
 workflow:
   export:
     secret: Workflow@123
+  user-adapter:
+    url: http://localhost:8090/api/adapter
 
 springdoc:
   api-docs:

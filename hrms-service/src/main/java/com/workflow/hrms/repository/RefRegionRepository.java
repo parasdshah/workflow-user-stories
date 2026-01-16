@@ -9,4 +9,5 @@ import java.util.List;
 @Repository
 public interface RefRegionRepository extends JpaRepository<RefRegion, Long> {
     List<RefRegion> findByPathStartingWith(String pathPrefix);
+    java.util.Optional<RefRegion> findByRegionName(String regionName);
 }

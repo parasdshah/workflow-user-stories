@@ -8,5 +8,6 @@ import java.util.List;
 
 @Repository
 public interface EmployeeMatrixAssignmentRepository extends JpaRepository<EmployeeMatrixAssignment, Long> {
-    List<EmployeeMatrixAssignment> findByRoleRoleCodeAndScopeRegionRegionId(String roleCode, Long regionId);
+    List<EmployeeMatrixAssignment> findByRoleRoleCodeAndScopeRegionRegionIdIn(String roleCode, List<Long> regionIds);
+    List<EmployeeMatrixAssignment> findByEmployeeEmployeeId(String employeeId);
 }
