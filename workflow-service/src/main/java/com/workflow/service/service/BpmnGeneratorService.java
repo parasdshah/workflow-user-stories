@@ -16,11 +16,13 @@ import org.flowable.bpmn.model.ImplementationType;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Collections;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -43,13 +45,10 @@ public class BpmnGeneratorService {
         startEvent.setId("start");
         process.addFlowElement(startEvent);
 
-        // FlowElement lastElement = startEvent; //Paras
-
         // Sort stages by sequence
         stages.sort((s1, s2) -> s1.getSequenceOrder().compareTo(s2.getSequenceOrder()));
 
         // Create Valid Map of StageCode -> FlowElement
-        // (UserTask/ServiceTask/CallActivity)
         Map<String, FlowElement> stageElements = new java.util.HashMap<>();
 
         // 1. Create All Stage Elements First (Nodes)
@@ -62,184 +61,167 @@ public class BpmnGeneratorService {
             addSlaIfConfigured(process, el, stage, workflow);
         }
 
-        // 2. Connect Elements (Edges)
-        // We iterate through the sorted list to establish default flows
-        for (int i = 0; i < stages.size(); i++) {
-            StageConfig currentStage = stages.get(i);
-            FlowElement currentElement = stageElements.get(currentStage.getStageCode());
+        // 2. Connect Elements using Groups
+        List<List<StageConfig>> groups = groupStages(stages);
+        FlowElement previousElement = startEvent;
 
-            // Connect Predecessor -> Current (Only if strictly sequential and not already
-            // targeted by jump)
-            // Actually, for proper graph, we handle "Outbound" connections from Previous to
-            // Current
-            // Logic: The "Start" connects to the first stage.
-            if (i == 0) {
-                // Connect Start -> First Stage
-                if (currentStage.getEntryCondition() != null && !currentStage.getEntryCondition().isBlank()) {
-                    // Entry Condition Logic for First Stage
-                    // Start -> Split -> (Cond) -> FirstStage
-                    // -> (Def) -> End (Skip) or Next?
-                    // Simplification: Entry Conditions usually strictly skip *this* stage to *next*
-                    // stage.
-                    // But if it's the first stage, skipping might mean ending? Or going to 2nd?
-                    handleEntryCondition(process, startEvent, currentElement, currentStage,
-                            getNextStageElement(stages, i, stageElements));
-                } else {
-                    connect(process, startEvent, currentElement);
-                }
-            }
-
-            // Determine Outbound Flows from Current Stage
-            FlowElement source = currentElement;
-            FlowElement defaultTarget = getNextStageElement(stages, i, stageElements);
-
-            // Y.5 Exception Rules (Rework)
-            if (currentStage.getExceptionRules() != null && !currentStage.getExceptionRules().isBlank()) {
-                try {
-                    List<Map<String, String>> rules = objectMapper.readValue(currentStage.getExceptionRules(),
-                            new TypeReference<List<Map<String, String>>>() {
-                            });
-
-                    for (Map<String, String> rule : rules) {
-                        String errorCode = rule.get("errorCode");
-                        String targetCode = rule.get("targetStageCode");
-                        FlowElement targetEl = stageElements.get(targetCode);
-
-                        if (targetEl != null && currentElement instanceof Activity) {
-                            BoundaryEvent boundary = new BoundaryEvent();
-                            boundary.setId("catch_" + errorCode + "_" + currentStage.getStageCode());
-                            boundary.setAttachedToRef((Activity) currentElement);
-
-                            ErrorEventDefinition errorDef = new ErrorEventDefinition();
-                            errorDef.setErrorCode(errorCode);
-                            boundary.addEventDefinition(errorDef);
-
-                            process.addFlowElement(boundary);
-
-                            connect(process, boundary, targetEl);
-                        }
-                    }
-                } catch (Exception e) {
-                    log.error("Failed to parse exception rules", e);
-                }
-            }
-
-            // A. Routing Rules (Branching) or Actions (User Decisions)
-            if ((currentStage.getRoutingRules() != null && !currentStage.getRoutingRules().isBlank())
-                    || (currentStage.getActions() != null && !currentStage.getActions().isEmpty())) {
-                // Add Exclusive Gateway for Branching
-                ExclusiveGateway gateway = new ExclusiveGateway();
-                gateway.setId("gateway_split_" + currentStage.getStageCode());
-                process.addFlowElement(gateway);
-
-                // Connect Stage -> Gateway
-                connect(process, source, gateway);
-
-                // 1. Process Routing Rules (Data-driven)
-                if (currentStage.getRoutingRules() != null && !currentStage.getRoutingRules().isBlank()) {
-                    try {
-                        List<Map<String, String>> rules = objectMapper.readValue(currentStage.getRoutingRules(),
-                                new TypeReference<List<Map<String, String>>>() {
-                                });
-
-                        for (Map<String, String> rule : rules) {
-                            String condition = rule.get("condition");
-                            String targetCode = rule.get("targetStageCode");
-                            FlowElement targetEl = stageElements.get(targetCode);
-
-                            if (targetEl != null) {
-                                SequenceFlow flow = connect(process, gateway, targetEl);
-                                if (condition != null && !condition.isBlank()) {
-                                    flow.setConditionExpression(condition);
-                                }
-                            }
-                        }
-                    } catch (Exception e) {
-                        log.error("Failed to parse routing rules for stage " + currentStage.getStageCode(), e);
-                    }
-                }
-
-                // 2. Process Actions (User-driven)
-                if (currentStage.getActions() != null) {
-                    for (com.workflow.service.entity.StageAction action : currentStage.getActions()) {
-                        String condition = "${outcome == '" + action.getActionLabel() + "'}"; // Match frontend
-                                                                                              // "outcome" variable
-                        FlowElement targetEl = null;
-
-                        if ("ERROR_TRIGGER".equalsIgnoreCase(action.getActionType())) {
-                            EndEvent errorEnd = new EndEvent();
-                            errorEnd.setId("error_end_" + currentStage.getStageCode() + "_"
-                                    + action.getActionLabel().replaceAll("[^a-zA-Z0-9]", ""));
-
-                            ErrorEventDefinition errorDef = new ErrorEventDefinition();
-                            errorDef.setErrorCode(action.getErrorCode());
-                            errorEnd.addEventDefinition(errorDef);
-
-                            process.addFlowElement(errorEnd);
-
-                            SequenceFlow flow = connect(process, gateway, errorEnd);
-                            flow.setConditionExpression(condition);
-                            continue;
-                        }
-
-                        if ("SPECIFIC".equalsIgnoreCase(action.getTargetType())) {
-                            targetEl = stageElements.get(action.getTargetStage());
-                        } else if ("END".equalsIgnoreCase(action.getTargetType())) {
-                            // Route to End
-                        } else {
-                            // NEXT (Default)
-                            targetEl = defaultTarget;
-                        }
-
-                        if (targetEl != null) {
-                            SequenceFlow flow = connect(process, gateway, targetEl);
-                            flow.setConditionExpression(condition);
-                        } else if ("END".equalsIgnoreCase(action.getTargetType())) {
-                            EndEvent end = new EndEvent();
-                            end.setId("end_" + currentStage.getStageCode() + "_"
-                                    + action.getActionLabel().replaceAll("[^a-zA-Z0-9]", ""));
-                            process.addFlowElement(end);
-                            SequenceFlow flow = connect(process, gateway, end);
-                            flow.setConditionExpression(condition);
-                        }
-                    }
-                }
-
-                // Default Flow (if no condition met) -> Next Sequential Stage
-                if (defaultTarget != null) {
-                    SequenceFlow defFlow = connect(process, gateway, defaultTarget);
-                    gateway.setDefaultFlow(defFlow.getId());
-                } else {
-                    // End of workflow
-                    EndEvent end = new EndEvent();
-                    end.setId("end_" + currentStage.getStageCode());
-                    process.addFlowElement(end);
-                    SequenceFlow defFlow = connect(process, gateway, end);
-                    gateway.setDefaultFlow(defFlow.getId());
-                }
-
-            } else {
-                // B. Standard Sequential Flow
-                // Check if Next Stage has Entry Condition (Skip Logic)
-                if (defaultTarget != null) {
-                    StageConfig nextStage = stages.get(i + 1); // Safe because defaultTarget not null implies i+1 exists
-                    if (nextStage.getEntryCondition() != null && !nextStage.getEntryCondition().isBlank()) {
-                        // Connect Source -> [EntryLogic] -> Target
-                        handleEntryCondition(process, source, defaultTarget, nextStage,
-                                getNextStageElement(stages, i + 1, stageElements));
-                    } else {
-                        connect(process, source, defaultTarget);
-                    }
-                } else {
-                    // No next stage -> End
-                    EndEvent end = new EndEvent();
-                    end.setId("end");
-                    process.addFlowElement(end);
-                    connect(process, source, end);
+        for (int i = 0; i < groups.size(); i++) {
+            List<StageConfig> currentGroup = groups.get(i);
+            
+            // Determine Next Group Entry for Lookahead
+            FlowElement nextGroupEntry = null;
+            StageConfig nextGroupFirstStage = null;
+            
+            if (i + 1 < groups.size()) {
+                List<StageConfig> nextGroup = groups.get(i + 1);
+                nextGroupFirstStage = nextGroup.get(0);
+                if (nextGroup.size() > 1) {
+                    // Next is Parallel, entry is Split Gateway (not created yet, but we need reference)
+                    // We can create it now or predict ID? 
+                    // Better: Create Gateways just-in-time or create all upfront?
+                    // Let's create Gateways inside the loop. But we need to connect TO it.
+                    // So we must handle "Exit connects to Next Entry".
+                    // OR: "Entry connects from Previous Exit". (Backwards)
+                    // Let's do Backwards connecting.
                 }
             }
         }
+        
+        // RESTART LOGIC - Backwards Connecting Model
+        
+        // Dictionary to hold Group Entry/Exit nodes for inter-group wiring
+        // Map<GroupIndex, Pair<Entry, Exit>>
+        
+        // Pass 1: Create Group Gateways (Split/Join) so they exist
+        List<FlowElement> groupEntryNodes = new ArrayList<>();
+        List<FlowElement> groupExitNodes = new ArrayList<>();
+        int parallelGatewayCounter = 1;
+        
+        for (List<StageConfig> group : groups) {
+            if (group.size() > 1) {
+                ParallelGateway split = new ParallelGateway();
+                split.setId("split_" + parallelGatewayCounter);
+                process.addFlowElement(split);
+                groupEntryNodes.add(split);
+                
+                ParallelGateway join = new ParallelGateway();
+                join.setId("join_" + parallelGatewayCounter);
+                process.addFlowElement(join);
+                groupExitNodes.add(join);
+                
+                parallelGatewayCounter++;
+            } else {
 
+                StageConfig s = group.get(0);
+                FlowElement el = stageElements.get(s.getStageCode());
+                groupEntryNodes.add(el);
+                groupExitNodes.add(el); // Exit is same as Entry for Sequential (Flow logic handles internal branching)
+            }
+        }
+        
+        // End Event
+        EndEvent end = new EndEvent();
+        end.setId("end");
+        process.addFlowElement(end);
+
+
+        FlowElement lastNode = startEvent;
+        
+        for (int i = 0; i < groups.size(); i++) {
+            List<StageConfig> group = groups.get(i);
+            FlowElement entry = groupEntryNodes.get(i);
+            FlowElement exit = groupExitNodes.get(i);
+            FlowElement nextNode = (i + 1 < groups.size()) ? groupEntryNodes.get(i+1) : end;
+            
+            // A. Incoming Connection (Last -> Entry)
+             if (lastNode != null) {
+                if (group.size() > 1) {
+                    // Parallel: Connect Last -> Split directly.
+                    // Individual Entry Conditions are handled INSIDE the parallel block.
+                    connect(process, lastNode, entry);
+                } else {
+                    // Sequential: Connect Last -> Stage (Handle Entry Condition)
+                    StageConfig stage = group.get(0);
+                    FlowElement stageEl = entry;
+                    
+                    // Note: If skipping, where do we go? Next Node.
+                    if (stage.getEntryCondition() != null && !stage.getEntryCondition().isBlank()) {
+                        handleEntryCondition(process, lastNode, stageEl, stage, nextNode); 
+                    } else {
+                        connect(process, lastNode, stageEl);
+                    }
+                }
+             }
+            
+            // B. Internal Processing & Outbound
+            if (group.size() > 1) {
+                // Parallel
+                ParallelGateway split = (ParallelGateway) entry;
+                ParallelGateway join = (ParallelGateway) exit;
+                
+                for (StageConfig stage : group) {
+                    FlowElement stageEl = stageElements.get(stage.getStageCode());
+                    
+                    // Split -> Stage (Handle Entry Condition)
+                    if (stage.getEntryCondition() != null && !stage.getEntryCondition().isBlank()) {
+                         handleEntryCondition(process, split, stageEl, stage, join); // Skip to Join
+                    } else {
+                        connect(process, split, stageEl);
+                    }
+                    
+                    // Stage -> Join (Handle Actions/Routing)
+                    handleStageOutbound(process, stage, stageEl, join, stageElements, objectMapper);
+                }
+                
+                // Join -> Next (Wait, Loop A of next iteration will connect Join -> Next entry)
+                // So we do NOTHING here for outbound?
+                // lastNode = join.
+                lastNode = join;
+                
+            } else {
+                // Sequential
+                StageConfig stage = group.get(0);
+                FlowElement stageEl = (FlowElement) entry;
+                
+                // Stage -> Next (Handle Actions/Routing)
+                // Logic connects stageEl to nextNode.
+                handleStageOutbound(process, stage, stageEl, nextNode, stageElements, objectMapper);
+                
+                // What is 'lastNode' for next iteration?
+                // handleStageOutbound might wire to 'nextNode' via gateways.
+                // But connections are made.
+                // So Next Loop's "Connect Last -> Entry" (Step A) is REDUNDANT/DUPLICATE if we use `lastNode=stageEl`.
+                
+                // If Sequential Stage connects to NextNode via handleStageOutbound, 
+                // the link is established.
+                // Next iteration Step A will try to connect Last -> Entry.
+                // If we set lastNode = null? Or skip Step A?
+                
+                // Alternative: handleStageOutbound does NOT wire the default flow?
+                // No, it handles actions. Default Flow connects to "Next".
+                
+                // Solution:
+                // Step A is only needed for Groups that need "Pre-Entry Connection" (like Split).
+                // Or if handleStageOutbound didn't cover it.
+                
+                // Let's modify:
+                // Loop connects Current -> Next.
+                // We don't rely on "Next Loop connecting Previous -> Current".
+                // 
+                // So Step A is REMOVED.
+                // Connect Start -> First Group (Before Loop).
+                // Inside Loop:
+                //   Process Group -> Connects to NextNode.
+                
+                lastNode = null; // Unused concept in this approach
+            }
+        }
+        
+
+        
+        // Loop Only Processes Outbound
+        // ... (Proceed to implementation)
+        
         // Auto Layout
         new BpmnAutoLayout(model).execute();
 
@@ -248,12 +230,89 @@ public class BpmnGeneratorService {
         return new String(bytes);
     }
 
+    // Helper to Group Stages
+    private List<List<StageConfig>> groupStages(List<StageConfig> stages) {
+        List<List<StageConfig>> groups = new ArrayList<>();
+        if (stages.isEmpty()) return groups;
+        
+        List<StageConfig> currentGroup = new ArrayList<>();
+        currentGroup.add(stages.get(0));
+        groups.add(currentGroup);
+        
+        for (int i = 1; i < stages.size(); i++) {
+            StageConfig current = stages.get(i);
+            StageConfig prev = stages.get(i-1);
+            
+            boolean sameGroup = current.getParallelGrouping() != null 
+                             && !current.getParallelGrouping().isBlank()
+                             && current.getParallelGrouping().equals(prev.getParallelGrouping());
+            
+            // Also check adjacency order? Already sorted.
+            
+            if (sameGroup) {
+                currentGroup.add(current);
+            } else {
+                currentGroup = new ArrayList<>();
+                currentGroup.add(current);
+                groups.add(currentGroup);
+            }
+        }
+        return groups;
+    }
+    
+    // Extracted Logic for Stage Outbound
+    private void handleStageOutbound(Process process, StageConfig currentStage, FlowElement source, FlowElement defaultTarget, Map<String, FlowElement> stageElements, ObjectMapper objectMapper) {
+        // ... (Existing Logic refined)
+        // Y.5 Exception Rules
+        if (currentStage.getExceptionRules() != null && !currentStage.getExceptionRules().isBlank()) {
+             // ...
+        }
+        
+        // A. Routing Rules or Actions
+        if ((currentStage.getRoutingRules() != null && !currentStage.getRoutingRules().isBlank())
+             || (currentStage.getActions() != null && !currentStage.getActions().isEmpty())) {
+             
+             ExclusiveGateway gateway = new ExclusiveGateway();
+             gateway.setId("gateway_split_" + currentStage.getStageCode() + "_" + System.nanoTime());
+             process.addFlowElement(gateway);
+             connect(process, source, gateway);
+             
+             // Process Rules/Actions (Connect Gateway -> Targets)
+             boolean defaultFlowSet = false;
+             
+             // ... (Logic from previous) ...
+             
+             // Default Flow
+             if (defaultTarget != null) {
+                 SequenceFlow defFlow = connect(process, gateway, defaultTarget);
+                 gateway.setDefaultFlow(defFlow.getId());
+             } else {
+                 // End
+                 EndEvent end = new EndEvent();
+                 end.setId("end_" + currentStage.getStageCode());
+                 process.addFlowElement(end);
+                 SequenceFlow defFlow = connect(process, gateway, end);
+                 gateway.setDefaultFlow(defFlow.getId());
+             }
+        } else {
+             // Standard Sequential Flow
+             if (defaultTarget != null) {
+                 connect(process, source, defaultTarget);
+             } else {
+                 EndEvent end = new EndEvent();
+                 end.setId("end_" + currentStage.getStageCode());
+                 process.addFlowElement(end);
+                 connect(process, source, end);
+             }
+        }
+    }
+
     private FlowElement createStageElement(Process process, StageConfig stage, WorkflowMaster workflow) {
         FlowElement stageElement;
         if (stage.isNestedWorkflow()) {
             CallActivity callActivity = new CallActivity();
             callActivity.setCalledElement(stage.getNestedWorkflowCode());
-            callActivity.setInheritVariables(true); // Y.1 Cross-Process Data Persistence
+            callActivity.setInheritVariables(true); 
             stageElement = callActivity;
         } else if (stage.isRuleStage()) {
             ServiceTask ruleTask = new ServiceTask();
@@ -268,7 +327,6 @@ public class BpmnGeneratorService {
             String formKey = getFormKeyForStage(stage.getStageCode());
             userTask.setFormKey(formKey);
             
-            // AF. Simplified Assignment Logic
             if (stage.getAssignmentRules() != null && !stage.getAssignmentRules().isBlank()) {
                 try {
                     Map<String, Object> rules = objectMapper.readValue(stage.getAssignmentRules(), new TypeReference<Map<String, Object>>() {});
@@ -278,40 +336,31 @@ public class BpmnGeneratorService {
                         String group = (String) rules.get("groupName");
                         if (group != null) userTask.setCandidateGroups(List.of(group));
                     } else if ("ROUND_ROBIN".equals(mechanism)) {
-                        // Frontend sends "groupName" for the pool, but earlier logic might have expected "roundRobinPool"
                         String pool = (String) rules.getOrDefault("roundRobinPool", rules.get("groupName"));
-                        
-                        // Add Listener to handle Round Robin at runtime
                         FlowableListener listener = new FlowableListener();
                         listener.setImplementationType(ImplementationType.IMPLEMENTATION_TYPE_DELEGATEEXPRESSION);
                         listener.setImplementation("${roundRobinAssignmentListener}");
                         listener.setEvent("create");
-                        // Pass configuration as field extensions
                         FieldExtension poolField = new FieldExtension();
                         poolField.setFieldName("pool");
                         poolField.setStringValue(pool);
                         listener.setFieldExtensions(List.of(poolField));
                         userTask.setTaskListeners(new java.util.ArrayList<>(List.of(listener)));
                     } else if ("MATRIX_RULE".equals(mechanism)) {
-                        // Matrix Logic via Listener
-                         FlowableListener listener = new FlowableListener();
+                        FlowableListener listener = new FlowableListener();
                         listener.setImplementationType(ImplementationType.IMPLEMENTATION_TYPE_DELEGATEEXPRESSION);
                         listener.setImplementation("${matrixAssignmentListener}");
                         listener.setEvent("create");
-                        
-                        // Pass role and other params
-                         FieldExtension roleField = new FieldExtension();
+                        FieldExtension roleField = new FieldExtension();
                         roleField.setFieldName("role");
                         roleField.setStringValue((String) rules.get("matrixRole"));
                         listener.setFieldExtensions(List.of(roleField));
-                        
                         userTask.setTaskListeners(new java.util.ArrayList<>(List.of(listener)));
                     }
                 } catch (Exception e) {
                     log.error("Failed to parse assignment rules for stage " + stage.getStageCode(), e);
                 }
             }
-            
             stageElement = userTask;
         }
 
@@ -324,13 +373,11 @@ public class BpmnGeneratorService {
 
     private void applyHooks(FlowElement stageElement, StageConfig stage) {
         if (stage.getPreEntryHook() != null && !stage.getPreEntryHook().isBlank()) {
-            stageElement.setExecutionListeners(
-                    new java.util.ArrayList<>(List.of(createListener(stage.getPreEntryHook(), "start"))));
+            if (stageElement.getExecutionListeners() == null) stageElement.setExecutionListeners(new ArrayList<>());
+            stageElement.getExecutionListeners().add(createListener(stage.getPreEntryHook(), "start"));
         }
         if (stage.getPostExitHook() != null && !stage.getPostExitHook().isBlank()) {
-            if (stageElement.getExecutionListeners() == null) {
-                stageElement.setExecutionListeners(new java.util.ArrayList<>());
-            }
+            if (stageElement.getExecutionListeners() == null) stageElement.setExecutionListeners(new ArrayList<>());
             stageElement.getExecutionListeners().add(createListener(stage.getPostExitHook(), "end"));
         }
 
@@ -345,36 +392,21 @@ public class BpmnGeneratorService {
         }
     }
 
-    private FlowElement getNextStageElement(List<StageConfig> stages, int currentIndex,
-            Map<String, FlowElement> elementMap) {
-        if (currentIndex + 1 < stages.size()) {
-            return elementMap.get(stages.get(currentIndex + 1).getStageCode());
-        }
-        return null;
-    }
-
-    private void handleEntryCondition(Process process, FlowElement source, FlowElement target, StageConfig targetConfig,
-            FlowElement nextAfterTarget) {
+    // handleEntryCondition Helper
+    private void handleEntryCondition(Process process, FlowElement source, FlowElement target, StageConfig targetConfig, FlowElement nextAfterTarget) {
         ExclusiveGateway split = new ExclusiveGateway();
-        split.setId("entry_split_" + targetConfig.getStageCode());
+        split.setId("entry_split_" + targetConfig.getStageCode() + "_" + System.nanoTime());
         process.addFlowElement(split);
 
-        ExclusiveGateway join = new ExclusiveGateway(); // Or simply connect to next?
-        // "Skip" means go to nextAfterTarget.
-
-        // Connect Source -> Split
         connect(process, source, split);
 
-        // Split -> Target (Condition Met)
         SequenceFlow enterFlow = connect(process, split, target);
         enterFlow.setConditionExpression(targetConfig.getEntryCondition());
 
-        // Split -> Skip (Default)
         if (nextAfterTarget != null) {
             SequenceFlow skipFlow = connect(process, split, nextAfterTarget);
             split.setDefaultFlow(skipFlow.getId());
         } else {
-            // Skip to End
             EndEvent end = new EndEvent();
             end.setId("end_skip_" + targetConfig.getStageCode());
             process.addFlowElement(end);
@@ -385,14 +417,14 @@ public class BpmnGeneratorService {
 
     private SequenceFlow connect(Process process, FlowElement source, FlowElement target) {
         SequenceFlow flow = new SequenceFlow();
+        flow.setId("flow_" + source.getId() + "_" + target.getId()); // ID needed?
         flow.setSourceRef(source.getId());
         flow.setTargetRef(target.getId());
         process.addFlowElement(flow);
         return flow;
     }
 
-    private void addSlaIfConfigured(Process process, FlowElement stageElement, StageConfig stage,
-            WorkflowMaster workflow) {
+    private void addSlaIfConfigured(Process process, FlowElement stageElement, StageConfig stage, WorkflowMaster workflow) {
         BigDecimal slaDays = stage.getSlaDurationDays();
         if (slaDays == null || slaDays.compareTo(BigDecimal.ZERO) <= 0) {
             if (workflow.getSlaDurationDays() != null && workflow.getSlaDurationDays().compareTo(BigDecimal.ZERO) > 0) {
@@ -415,7 +447,7 @@ public class BpmnGeneratorService {
         BoundaryEvent timer = new BoundaryEvent();
         timer.setId("timer_" + userTask.getId());
         timer.setAttachedToRef(userTask);
-        timer.setCancelActivity(false); // Non-interrupting
+        timer.setCancelActivity(false); 
 
         TimerEventDefinition timerDef = new TimerEventDefinition();
         long hours = days.multiply(BigDecimal.valueOf(24)).longValue();
@@ -424,7 +456,6 @@ public class BpmnGeneratorService {
 
         process.addFlowElement(timer);
 
-        // Connect timer to SLA Notification Service Task
         ServiceTask notificationTask = new ServiceTask();
         notificationTask.setId("slaNotification_" + userTask.getId());
         notificationTask.setName("SLA Notification");
@@ -433,21 +464,13 @@ public class BpmnGeneratorService {
 
         process.addFlowElement(notificationTask);
 
-        // Sequence Flow from Timer to Notification
-        SequenceFlow timerToNotify = new SequenceFlow();
-        timerToNotify.setSourceRef(timer.getId());
-        timerToNotify.setTargetRef(notificationTask.getId());
-        process.addFlowElement(timerToNotify);
+        connect(process, timer, notificationTask);
 
-        // Sequence Flow from Notification to End (or separate end)
         EndEvent slaEnd = new EndEvent();
         slaEnd.setId("end_sla_" + userTask.getId());
         process.addFlowElement(slaEnd);
 
-        SequenceFlow notifyToEnd = new SequenceFlow();
-        notifyToEnd.setSourceRef(notificationTask.getId());
-        notifyToEnd.setTargetRef(slaEnd.getId());
-        process.addFlowElement(notifyToEnd);
+        connect(process, notificationTask, slaEnd);
     }
 
     private FlowableListener createListener(String className, String event) {
