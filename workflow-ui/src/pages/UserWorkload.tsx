@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Container, Title, Paper, Table, Text, Badge, ActionIcon, Group, Collapse, Box, Button, Loader } from '@mantine/core';
-import { IconChevronRight, IconChevronDown, IconBriefcase } from '@tabler/icons-react';
+import { Container, Title, Paper, Table, Text, Badge, ActionIcon, Group, Collapse, Box, Button, Loader, TextInput, Pagination } from '@mantine/core';
+import { IconChevronRight, IconChevronDown, IconBriefcase, IconSearch } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 
 interface TaskSummaryDTO {
@@ -24,6 +24,9 @@ export default function UserWorkload() {
     const [data, setData] = useState<UserWorkloadDTO[]>([]);
     const [loading, setLoading] = useState(true);
     const [expandedRows, setExpandedRows] = useState<string[]>([]);
+    const [search, setSearch] = useState('');
+    const [page, setPage] = useState(1);
+    const pageSize = 20;
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -52,9 +55,21 @@ export default function UserWorkload() {
         );
     };
 
+    useEffect(() => {
+        setPage(1);
+    }, [search]);
+
     if (loading) return <Container py="xl"><Loader /></Container>;
 
-    const rows = data.map((user) => {
+    const filteredData = data.filter(user =>
+        user.userName.toLowerCase().includes(search.toLowerCase()) ||
+        user.userId.toLowerCase().includes(search.toLowerCase())
+    );
+
+    const paginatedData = filteredData.slice((page - 1) * pageSize, page * pageSize);
+    const totalPages = Math.ceil(filteredData.length / pageSize);
+
+    const rows = paginatedData.map((user) => {
         const isExpanded = expandedRows.includes(user.userId);
 
         return (
@@ -126,7 +141,15 @@ export default function UserWorkload() {
         <Container size="xl" py="xl">
             <Group justify="space-between" mb="lg">
                 <Title order={2}>User Workload Dashboard</Title>
-                <Button variant="light" onClick={fetchData}>Refresh</Button>
+                <Group>
+                    <TextInput
+                        placeholder="Search user..."
+                        leftSection={<IconSearch size={14} />}
+                        value={search}
+                        onChange={(event) => setSearch(event.currentTarget.value)}
+                    />
+                    <Button variant="light" onClick={fetchData}>Refresh</Button>
+                </Group>
             </Group>
 
             <Paper withBorder shadow="sm" radius="md">
@@ -139,8 +162,13 @@ export default function UserWorkload() {
                     </Table.Thead>
                     <Table.Tbody>{rows}</Table.Tbody>
                 </Table>
-                {data.length === 0 && (
-                    <Text p="xl" ta="center" c="dimmed">No active users found.</Text>
+                {filteredData.length === 0 && (
+                    <Text p="xl" ta="center" c="dimmed">No matching users found.</Text>
+                )}
+                {totalPages > 1 && (
+                    <Group justify="center" p="md" style={{ borderTop: '1px solid #dee2e6' }}>
+                        <Pagination total={totalPages} value={page} onChange={setPage} />
+                    </Group>
                 )}
             </Paper>
         </Container>

@@ -6,6 +6,8 @@ The goal is to provide a dashboard that allows supervisors and administrators to
 ## 2. Functional Requirements
 
 ### 2.1. Workload Grid
+- **Search**: A search bar at the top to filter users by Name or ID. Filtering happens real-time (client-side).
+- **Pagination**: The grid displays 20 users per page. Standard pagination controls (Next, Prev, Page Numbers) are located at the bottom.
 - **Display**: A grid/table view listing all users with at least one active task.
 - **Columns**:
     - **User Name**: The full name of the assignee (e.g., "Grace 1").
