@@ -10,4 +10,5 @@ import java.util.List;
 public interface EmployeeMatrixAssignmentRepository extends JpaRepository<EmployeeMatrixAssignment, Long> {
     List<EmployeeMatrixAssignment> findByRoleRoleCodeAndScopeRegionRegionIdIn(String roleCode, List<Long> regionIds);
     List<EmployeeMatrixAssignment> findByEmployeeEmployeeId(String employeeId);
+    List<EmployeeMatrixAssignment> findByRoleRoleCode(String roleCode);
 }

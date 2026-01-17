@@ -46,7 +46,12 @@ public class BpmnGeneratorService {
         process.addFlowElement(startEvent);
 
         // Sort stages by sequence
-        stages.sort((s1, s2) -> s1.getSequenceOrder().compareTo(s2.getSequenceOrder()));
+        // Sort stages by sequence
+        List<StageConfig> sortedStages = new ArrayList<>(stages);
+        sortedStages.sort((s1, s2) -> s1.getSequenceOrder().compareTo(s2.getSequenceOrder()));
+        
+        // Use sortedStages instead of stages below
+        stages = sortedStages;
 
         // Create Valid Map of StageCode -> FlowElement
         Map<String, FlowElement> stageElements = new java.util.HashMap<>();

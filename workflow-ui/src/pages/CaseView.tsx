@@ -45,8 +45,11 @@ export default function CaseView() {
                 ]);
 
                 if (caseRes.ok && stagesRes.ok) {
-                    setCaseDetails(await caseRes.json());
-                    setStages(await stagesRes.json());
+                    const cData = await caseRes.json();
+                    const sData = await stagesRes.json();
+                    console.log("CaseView Stages:", sData);
+                    setCaseDetails(cData);
+                    setStages(sData);
                 } else {
                     console.error("Failed to load case info");
                 }

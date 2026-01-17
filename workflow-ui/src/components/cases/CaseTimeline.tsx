@@ -8,6 +8,7 @@ interface StageDTO {
     taskId?: string;
     status: string; // ACTIVE, COMPLETED
     assignee?: string;
+    assigneeName?: string;
     createdTime?: string;
     endTime?: string;
     dueDate?: string;
@@ -24,7 +25,10 @@ function NestedTimeline({ caseId }: { caseId: string }) {
     useEffect(() => {
         fetch(`/api/runtime/cases/${caseId}/stages`)
             .then(res => res.json())
-            .then(data => setStages(data))
+            .then(data => {
+                console.log("Stages data received:", data);
+                setStages(data);
+            })
             .catch(err => console.error(err))
             .finally(() => setLoading(false));
     }, [caseId]);
@@ -51,7 +55,7 @@ function NestedTimeline({ caseId }: { caseId: string }) {
                         <Badge size="xs" color={stage.actionTaken === 'REJECT' ? 'red' : 'green'}>{stage.actionTaken}</Badge>
                     )}
                     <Text c="dimmed" size="xs">
-                        Assignee: {stage.assignee || 'Unassigned'}
+                        Assignee: {stage.assigneeName || stage.assignee || 'Unassigned'}
                     </Text>
                     <Text size="xs" mt={4} c="dimmed">
                         Created: {stage.createdTime ? new Date(stage.createdTime).toLocaleString() : '-'}
@@ -141,24 +145,7 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
         setPendingAction(null);
     };
 
-    const [userMap, setUserMap] = useState<Record<string, string>>({});
-
-    useEffect(() => {
-        const uniqueAssignees = Array.from(new Set(stages.map(s => s.assignee).filter(Boolean)));
-
-        uniqueAssignees.forEach(async (userId) => {
-            if (!userId || userMap[userId]) return;
-            try {
-                const res = await fetch(`/api/adapter/users/${userId}/attributes`);
-                if (res.ok) {
-                    const data = await res.json();
-                    setUserMap(prev => ({ ...prev, [userId!]: data.fullName }));
-                }
-            } catch (e) {
-                console.error("Failed to resolve user name for", userId);
-            }
-        });
-    }, [stages]);
+    // userMap logic removed as backend provides assigneeName
 
     return (
         <Card withBorder padding="xl" radius="md">
@@ -192,7 +179,7 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
                         })()}
 
                         <Text c="dimmed" size="sm">
-                            Assignee: {stage.assignee ? (userMap[stage.assignee] ? `${userMap[stage.assignee]} (${stage.assignee})` : stage.assignee) : 'Unassigned'}
+                            Assignee: {stage.assigneeName ? `${stage.assigneeName} (${stage.assignee})` : (stage.assignee || 'Unassigned')}
                         </Text>
                         <Text size="xs" mt={4}>
                             Created: {stage.createdTime ? new Date(stage.createdTime).toLocaleString() : '-'}

@@ -44,4 +44,48 @@ public class UserAdapterClient {
         }
         return Collections.emptyList();
     }
+
+    public List<String> getRoleMembers(String role) {
+        try {
+            String url = adapterUrl + "/role-members?role=" + role;
+            log.info("Calling User Adapter for Role Members at: {}", url);
+            
+            // Assuming response is List<String> directly
+            @SuppressWarnings("unchecked")
+            List<String> response = restTemplate.getForObject(url, List.class);
+            
+            if (response != null) {
+                return response;
+            }
+        } catch (Exception e) {
+            log.error("Failed to get role members via adapter: {}", e.getMessage(), e);
+        }
+        return Collections.emptyList();
+    }
+
+    public java.util.Map<String, String> searchUsers(List<String> userIds) {
+        try {
+            String url = adapterUrl + "/users/search";
+            log.info("Calling User Adapter for Batch User Search at: {}", url);
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<List<String>> entity = new HttpEntity<>(userIds, headers);
+
+            // Need custom response type or use List<Map>
+            // Returning Map<UserId, FullName>
+            List<java.util.Map<String, String>> response = restTemplate.postForObject(url, entity, List.class);
+            
+            if (response != null) {
+                java.util.Map<String, String> names = new java.util.HashMap<>();
+                for (java.util.Map<String, String> user : response) {
+                    names.put(user.get("userId"), user.get("fullName"));
+                }
+                return names;
+            }
+        } catch (Exception e) {
+            log.error("Failed to search users via adapter: {}", e.getMessage(), e);
+        }
+        return Collections.emptyMap();
+    }
 }

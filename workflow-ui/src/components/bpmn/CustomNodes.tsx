@@ -68,6 +68,12 @@ export function BPMNUserTaskNode({ data }: NodeProps) {
                     <div style={{ overflow: 'hidden' }}>
                         <Text size="sm" fw={600} truncate>{data.label}</Text>
                         <Text size="xs" c="dimmed" truncate>{data.subLabel || 'User Task'}</Text>
+                        {data.assignee && (
+                            <Group gap={4} mt={3}>
+                                <IconUser size={10} style={{ opacity: 0.7 }} />
+                                <Text size="xs" fw={500} c="dark" truncate>{data.assignee}</Text>
+                            </Group>
+                        )}
                     </div>
                 </Group>
                 {/* Boundary Event Attachment Point (Bottom) */}

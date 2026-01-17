@@ -34,10 +34,10 @@ public class CaseService {
     private final TaskService taskService;
     private final WorkflowMasterRepository workflowRepository;
     private final com.workflow.service.repository.StageConfigRepository stageConfigRepository;
+    private final com.workflow.service.integration.UserAdapterClient userAdapterClient;
 
     @Transactional
     public String initiateCase(String workflowCode, Map<String, Object> variables, String userId) {
-        log.info("Initiating case for workflow: {} by user: {}", workflowCode, userId);
 
         // Ensure workflow exists
         // Note: In a real system, we might check if a 'deployed' process definition
@@ -107,16 +107,19 @@ public class CaseService {
         List<StageDTO> stages = new ArrayList<>();
 
         // 1. Completed Stages (Historic Tasks)
+        // 1. Completed Stages (Historic Tasks)
         List<HistoricTaskInstance> historicTasks = historyService.createHistoricTaskInstanceQuery()
                 .processInstanceId(caseId)
-                .finished()
                 .finished()
                 .includeTaskLocalVariables() // Fetch local vars for actionTaken
                 .includeProcessVariables() // Fetch process vars for display
                 .orderByTaskCreateTime().asc()
                 .list();
 
+        log.info("Found {} historic tasks for case {}", historicTasks.size(), caseId);
         for (HistoricTaskInstance task : historicTasks) {
+            log.info("Historic Task: ID={}, Name={}, Assignee={}, EndTime={}", 
+                    task.getId(), task.getName(), task.getAssignee(), task.getEndTime());
             stages.add(mapToStageDTO(task, "COMPLETED"));
         }
 
@@ -147,6 +150,8 @@ public class CaseService {
         // Sort all by created time
         stages.sort(Comparator.comparing(StageDTO::getCreatedTime, Comparator.nullsLast(Comparator.naturalOrder())));
 
+        resolveAssigneeNames(stages);
+
         return stages;
     }
 
@@ -175,6 +180,7 @@ public class CaseService {
             // For now, StageDTO contains task info and stage info.)
             result.add(dto);
         }
+        resolveAssigneeNames(result);
         return result;
     }
 
@@ -185,51 +191,69 @@ public class CaseService {
             throw new IllegalArgumentException("Task not found: " + taskId);
         }
 
-        // Set assignee if not set (claim) or verify assignee?
-        // For now, allow completion by user.
-        taskService.setAssignee(taskId, userId); // Auto-claim
+        String currentAssignee = task.getAssignee();
+        log.info("Completing task {}. Current Assignee: {}", taskId, currentAssignee);
 
-        // K. Stage Actions - Validate outcome
-        if (variables != null && variables.containsKey("outcome")) {
-            String outcome = (String) variables.get("outcome");
+        try {
+            org.flowable.common.engine.impl.identity.Authentication.setAuthenticatedUserId(userId);
 
-            // Get Flowable Task to get execution/process definition
-            String processDefinitionId = task.getProcessDefinitionId();
-            // We need Process Definition Key (Workflow Code)
-            // We need Process Definition Key (Workflow Code)
-            org.flowable.engine.repository.ProcessDefinition pd = repositoryService.createProcessDefinitionQuery()
-                    .processDefinitionId(processDefinitionId).singleResult();
+            // Backup Assignee to Variable to guarantee persistence in history
+            if (currentAssignee != null && !currentAssignee.trim().isEmpty()) {
+                 taskService.setVariableLocal(taskId, "savedAssignee", currentAssignee);
+            }
 
-            if (pd != null) {
-                String workflowCode = pd.getKey();
-                String stageCode = task.getTaskDefinitionKey();
+            // Logic to preserve or claim assignee
+            if (currentAssignee == null || currentAssignee.trim().isEmpty()) {
+                log.info("Task {} is unassigned. Auto-claim for user {}", taskId, userId);
+                taskService.setAssignee(taskId, userId); 
+                taskService.setVariableLocal(taskId, "savedAssignee", userId); // Ensure we save the claimed user
+            } else {
+                 // Force persistence attempt (keep for good measure, though variable is the real fix)
+                taskService.setAssignee(taskId, currentAssignee);
+            }
 
-                // Fetch Stage Config
-                Optional<com.workflow.service.entity.StageConfig> configOpt = stageConfigRepository
-                        .findByWorkflowCodeAndStageCode(workflowCode, stageCode);
+            // K. Stage Actions - Validate outcome
+            if (variables != null && variables.containsKey("outcome")) {
+                String outcome = (String) variables.get("outcome");
 
-                if (configOpt.isPresent()) {
-                    var actions = configOpt.get().getActions();
-                    if (actions != null && !actions.isEmpty()) {
-                        boolean isValid = actions.stream()
-                                .anyMatch(a -> a.getActionLabel().equals(outcome)); // Strict match on label
+                // Get Flowable Task to get execution/process definition
+                String processDefinitionId = task.getProcessDefinitionId();
+                org.flowable.engine.repository.ProcessDefinition pd = repositoryService.createProcessDefinitionQuery()
+                        .processDefinitionId(processDefinitionId).singleResult();
 
-                        if (!isValid) {
-                            throw new IllegalArgumentException(
-                                    "Invalid outcome: " + outcome + ". Allowed actions: "
-                                            + actions.stream()
-                                                    .map(com.workflow.service.entity.StageAction::getActionLabel)
-                                                    .collect(java.util.stream.Collectors.toList()));
+                if (pd != null) {
+                    String workflowCode = pd.getKey();
+                    String stageCode = task.getTaskDefinitionKey();
+
+                    // Fetch Stage Config
+                    Optional<com.workflow.service.entity.StageConfig> configOpt = stageConfigRepository
+                            .findByWorkflowCodeAndStageCode(workflowCode, stageCode);
+
+                    if (configOpt.isPresent()) {
+                        var actions = configOpt.get().getActions();
+                        if (actions != null && !actions.isEmpty()) {
+                            boolean isValid = actions.stream()
+                                    .anyMatch(a -> a.getActionLabel().equals(outcome)); // Strict match on label
+
+                            if (!isValid) {
+                                throw new IllegalArgumentException(
+                                        "Invalid outcome: " + outcome + ". Allowed actions: "
+                                                + actions.stream()
+                                                        .map(com.workflow.service.entity.StageAction::getActionLabel)
+                                                        .collect(java.util.stream.Collectors.toList()));
+                            }
                         }
                     }
                 }
+                // Save outcome as LOCAL variable to persist action for this specific task
+                taskService.setVariableLocal(taskId, "outcome", outcome);
             }
-            // Save outcome as LOCAL variable to persist action for this specific task
-            taskService.setVariableLocal(taskId, "outcome", outcome);
-        }
 
-        taskService.complete(taskId, variables);
-        log.info("Task {} completed by {}", taskId, userId);
+            taskService.complete(taskId, variables);
+            log.info("Task {} completed by {}", taskId, userId);
+        } finally {
+            org.flowable.common.engine.impl.identity.Authentication.setAuthenticatedUserId(null); // Clear context
+        }
     }
 
     private CaseDTO mapToCaseDTO(ProcessInstance process) {
@@ -300,7 +324,14 @@ public class CaseService {
     }
 
     private StageDTO mapToStageDTO(HistoricTaskInstance task, String status) {
-        StageDTO dto = mapCommonTaskInfo(task.getName(), task.getTaskDefinitionKey(), task.getAssignee(),
+        // Fallback Logic for Assignee
+        String assignee = task.getAssignee();
+        if (assignee == null && task.getTaskLocalVariables() != null && task.getTaskLocalVariables().containsKey("savedAssignee")) {
+             assignee = (String) task.getTaskLocalVariables().get("savedAssignee");
+             log.info("Recovered assignee {} from savedAssignee variable for task {}", assignee, task.getId());
+        }
+
+        StageDTO dto = mapCommonTaskInfo(task.getName(), task.getTaskDefinitionKey(), assignee,
                 task.getCreateTime(), task.getDueDate(), task.getId(), task.getProcessDefinitionId(),
                 task.getProcessInstanceId());
         dto.setStatus(status);
@@ -386,16 +417,22 @@ public class CaseService {
         // 2. Get Static Graph
         com.workflow.service.dto.GraphDTO graph = workflowDefinitionService.getGlobalGraph(rootWorkflowCode);
 
-        // 3. Collect Runtime Status
-        // Map<NodeID, Status>
-        Map<String, String> statusMap = new HashMap<>();
-        collectRuntimeStatus(caseId, rootWorkflowCode, statusMap);
+        // 3. Collect Runtime Status & Info
+        Map<String, NodeRuntimeInfo> runtimeInfoMap = new HashMap<>();
+        collectRuntimeInfo(caseId, rootWorkflowCode, runtimeInfoMap);
+
+        // Resolve Assignees for Graph
+        Set<String> allAssignees = new HashSet<>();
+        runtimeInfoMap.values().forEach(info -> allAssignees.addAll(info.assignees));
+        Map<String, String> resolvedNames = new HashMap<>();
+        if (!allAssignees.isEmpty()) {
+            resolvedNames = userAdapterClient.searchUsers(new ArrayList<>(allAssignees));
+        }
 
         // 4. Enrich Graph Nodes
         for (com.workflow.service.dto.GraphDTO.NodeDTO node : graph.getNodes()) {
             // Calculate status
-            // Default to PENDING/FUTURE if not in map
-            String status = statusMap.getOrDefault(node.getId(), "PENDING");
+            NodeRuntimeInfo info = runtimeInfoMap.getOrDefault(node.getId(), new NodeRuntimeInfo("PENDING"));
 
             // Enrich Data
             Object originalData = node.getData();
@@ -413,37 +450,64 @@ public class CaseService {
                 newData = new HashMap<>();
             }
 
-            newData.put("status", status);
+            newData.put("status", info.status);
+            if (!info.assignees.isEmpty()) {
+                // Join assignees with comma or pass list.
+                // Map IDs to Names
+                Map<String, String> finalNames = resolvedNames;
+                List<String> names = info.assignees.stream()
+                    .map(id -> finalNames.getOrDefault(id, id))
+                    .collect(java.util.stream.Collectors.toList());
+                newData.put("assignee", String.join(", ", names));
+                newData.put("assigneeIds", info.assignees); // Keep IDs if needed
+            }
             node.setData(newData);
         }
 
         return graph;
     }
 
-    private void collectRuntimeStatus(String processInstanceId, String prefix, Map<String, String> statusMap) {
+    private void collectRuntimeInfo(String processInstanceId, String prefix, Map<String, NodeRuntimeInfo> infoMap) {
         // Query History for all activities in this process instance
         List<HistoricActivityInstance> activities = historyService.createHistoricActivityInstanceQuery()
                 .processInstanceId(processInstanceId)
                 .list();
 
         for (HistoricActivityInstance activity : activities) {
-            // Mapping: Graph Node ID = Prefix + "_" + ActivityID (StageCode)
-            // But wait, BPMN Activity ID = StageCode.
-            // So:
             String nodeId = prefix + "_" + activity.getActivityId();
+            
+            NodeRuntimeInfo info = infoMap.computeIfAbsent(nodeId, k -> new NodeRuntimeInfo("PENDING"));
 
-            String status = (activity.getEndTime() != null) ? "COMPLETED" : "ACTIVE";
-            statusMap.put(nodeId, status);
+            // Status Logic: If any instance is Active -> Active. Else if any Completed -> Completed.
+            String currentStatus = (activity.getEndTime() != null) ? "COMPLETED" : "ACTIVE";
+            
+            // Priority: ACTIVE > COMPLETED > PENDING
+            if ("ACTIVE".equals(currentStatus)) {
+                info.status = "ACTIVE";
+            } else if ("COMPLETED".equals(currentStatus) && !"ACTIVE".equals(info.status)) {
+                info.status = "COMPLETED";
+            }
+
+            // Collect Assignee
+            if (activity.getAssignee() != null) {
+                info.assignees.add(activity.getAssignee());
+            }
 
             // Recurse for Call Activities
             if ("callActivity".equals(activity.getActivityType()) && activity.getCalledProcessInstanceId() != null) {
-                // The Call Activity itself is "Active" or "Completed" in the parent.
-                // But we also need to fill the children nodes.
-                // The children nodes use the CallActivity's NodeID (Group Node ID) as their
-                // prefix.
-                // The Group Node ID IS `nodeId` calculated above.
-                collectRuntimeStatus(activity.getCalledProcessInstanceId(), nodeId, statusMap);
+                collectRuntimeInfo(activity.getCalledProcessInstanceId(), nodeId, infoMap);
             }
+        }
+    }
+    
+    @lombok.Data
+    @lombok.AllArgsConstructor
+    private static class NodeRuntimeInfo {
+        String status;
+        Set<String> assignees = new HashSet<>();
+        
+        public NodeRuntimeInfo(String status) {
+            this.status = status;
         }
     }
 
@@ -500,5 +564,28 @@ public class CaseService {
         }
 
         return dto;
+    }
+
+    private void resolveAssigneeNames(List<StageDTO> stages) {
+        List<String> assignees = stages.stream()
+            .map(StageDTO::getAssignee)
+            .filter(Objects::nonNull)
+            .distinct()
+            .collect(java.util.stream.Collectors.toList());
+
+        log.info("Resolving names for assignees: {}", assignees);
+            
+        if (!assignees.isEmpty()) {
+            Map<String, String> names = userAdapterClient.searchUsers(assignees);
+            log.info("Resolved names map: {}", names);
+            for (StageDTO stage : stages) {
+                if (stage.getAssignee() != null) {
+                    String name = names.get(stage.getAssignee());
+                    if (name != null) {
+                        stage.setAssigneeName(name);
+                    }
+                }
+            }
+        }
     }
 }

@@ -32,11 +32,11 @@ public class RoundRobinAssignmentListener implements TaskListener {
             log.info("Executing Round Robin Assignment for Role: {}", roleCode);
 
             // 1. Get Users in Pool
-            ResolutionRequest req = new ResolutionRequest();
-            req.setRole(roleCode); // Fixed: String setter
+            // ResolutionRequest req = new ResolutionRequest();
+            // req.setRole(roleCode); 
             
-            // We assume Adapter handles "Find all users with this role" if other criteria are empty
-            List<String> candidates = userAdapterClient.resolveUsers(req);
+            // We use getRoleMembers for Round Robin as we want ALL candidates
+            List<String> candidates = userAdapterClient.getRoleMembers(roleCode);
 
             if (candidates == null || candidates.isEmpty()) {
                 log.warn("No candidates found for Round Robin pool: {}", roleCode);
@@ -48,36 +48,34 @@ public class RoundRobinAssignmentListener implements TaskListener {
 
             // 3. Find Last Assignee for this Process Definition Key AND Task Definition Key
             String processDefinitionId = delegateTask.getProcessDefinitionId();
-            // Standard Flowable ID format: Key:Version:Id
-            // Note: If ID format is different, fallback to exact match?
-            // Safer: Use process ID but filtering by Key is better for across versions.
             String processDefinitionKey = processDefinitionId.split(":")[0];
 
-            // Find last *completed* task for this specific stage in this workflow type
+            // Optimized Query: Fetch only the latest 1 finished task
             List<HistoricTaskInstance> lastTasks = historyService.createHistoricTaskInstanceQuery()
                 .processDefinitionKey(processDefinitionKey)
                 .taskDefinitionKey(delegateTask.getTaskDefinitionKey())
                 .finished()
-                .list();
+                .orderByHistoricTaskInstanceEndTime().desc()
+                .listPage(0, 1);
             
-            // Sort by End Time DESC (Java side to avoid API version mismatch)
-            lastTasks.sort((t1, t2) -> {
-                if (t1.getEndTime() == null) return 1;
-                if (t2.getEndTime() == null) return -1;
-                return t2.getEndTime().compareTo(t1.getEndTime());
-            });
-
             String nextAssignee = candidates.get(0);
+            String lastAssignee = null;
 
             if (!lastTasks.isEmpty()) {
-                String lastAssignee = lastTasks.get(0).getAssignee();
+                lastAssignee = lastTasks.get(0).getAssignee();
+                log.info("Round Robin: Found last assignee: {}", lastAssignee);
+                
                 if (lastAssignee != null) {
                     int lastIdx = candidates.indexOf(lastAssignee);
                     if (lastIdx != -1) {
                         int nextIdx = (lastIdx + 1) % candidates.size();
                         nextAssignee = candidates.get(nextIdx);
+                    } else {
+                         log.warn("Round Robin: Last assignee {} not found in current pool {}. Resetting to first.", lastAssignee, candidates);
                     }
                 }
+            } else {
+                log.info("Round Robin: No previous tasks found. Assigning to first candidate.");
             }
 
             log.info("Round Robin: Assigned {} from pool of {}", nextAssignee, candidates.size());

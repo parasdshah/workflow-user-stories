@@ -30,6 +30,15 @@ public class AdapterController {
         return ResponseEntity.ok(resolutionService.resolveUsers(request));
     }
 
+    @GetMapping("/role-members")
+    public ResponseEntity<List<String>> getRoleMembers(@RequestParam String role) {
+        List<String> userIds = matrixRepo.findByRoleRoleCode(role).stream()
+            .map(a -> a.getEmployee().getEmployeeId())
+            .distinct()
+            .collect(java.util.stream.Collectors.toList());
+        return ResponseEntity.ok(userIds);
+    }
+
     @GetMapping("/users/{userId}/attributes")
     public ResponseEntity<UserAttributes> getUserAttributes(@PathVariable String userId) {
         return employeeRepo.findById(userId)
@@ -54,5 +63,19 @@ public class AdapterController {
                 return ResponseEntity.ok(attr);
             })
             .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping("/users/search")
+    public ResponseEntity<List<UserAttributes>> searchUsers(@RequestBody List<String> userIds) {
+        List<UserAttributes> attributes = employeeRepo.findAllById(userIds).stream()
+            .map(emp -> {
+                UserAttributes attr = new UserAttributes();
+                attr.setUserId(emp.getEmployeeId());
+                attr.setFullName(emp.getFullName());
+                attr.setEmail(emp.getEmail());
+                return attr;
+            })
+            .collect(java.util.stream.Collectors.toList());
+        return ResponseEntity.ok(attributes);
     }
 }

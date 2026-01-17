@@ -12,6 +12,7 @@ public class StageDTO {
     private String caseId; // Process Instance ID
     private String status; // ACTIVE, COMPLETED
     private String assignee;
+    private String assigneeName; // Added for display
     
     @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdTime;
