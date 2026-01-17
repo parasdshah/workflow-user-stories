@@ -605,4 +605,64 @@ public class CaseService {
             }
         }
     }
+    public List<com.workflow.service.dto.UserWorkloadDTO> getUserWorkload() {
+        // 1. Fetch ALL active user tasks
+        List<Task> activeTasks = taskService.createTaskQuery()
+                .active()
+                .includeProcessVariables()
+                .orderByTaskCreateTime().desc()
+                .list();
+
+        // 2. Group by Assignee
+        Map<String, List<Task>> tasksByAssignee = activeTasks.stream()
+                .filter(t -> t.getAssignee() != null) // Ignore unassigned
+                .collect(java.util.stream.Collectors.groupingBy(Task::getAssignee));
+
+        if (tasksByAssignee.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 3. Resolve Assignee Names
+        Map<String, String> userNames = userAdapterClient.searchUsers(new ArrayList<>(tasksByAssignee.keySet()));
+
+        // 4. Map to DTO
+        List<com.workflow.service.dto.UserWorkloadDTO> result = new ArrayList<>();
+        
+        for (Map.Entry<String, List<Task>> entry : tasksByAssignee.entrySet()) {
+            String userId = entry.getKey();
+            List<Task> tasks = entry.getValue();
+            String userName = userNames.getOrDefault(userId, userId);
+
+            List<com.workflow.service.dto.UserWorkloadDTO.TaskSummaryDTO> taskSummaries = tasks.stream()
+                    .map(t -> {
+                        String workflowName = (String) t.getProcessVariables().get("workflowName");
+                        if (workflowName == null) {
+                             workflowName = t.getProcessDefinitionId().split(":")[0];
+                        }
+
+                        return com.workflow.service.dto.UserWorkloadDTO.TaskSummaryDTO.builder()
+                                .taskId(t.getId())
+                                .caseId(t.getProcessInstanceId())
+                                .stageName(t.getName())
+                                .stageCode(t.getTaskDefinitionKey())
+                                .createdTime(LocalDateTime.ofInstant(t.getCreateTime().toInstant(), ZoneId.systemDefault()))
+                                .dueDate(t.getDueDate() != null ? LocalDateTime.ofInstant(t.getDueDate().toInstant(), ZoneId.systemDefault()) : null)
+                                .workflowName(workflowName)
+                                .build();
+                    })
+                    .collect(java.util.stream.Collectors.toList());
+
+            result.add(com.workflow.service.dto.UserWorkloadDTO.builder()
+                    .userId(userId)
+                    .userName(userName)
+                    .pendingCount(tasks.size())
+                    .tasks(taskSummaries)
+                    .build());
+        }
+
+        // Sort by pending count desc
+        result.sort((a, b) -> Integer.compare(b.getPendingCount(), a.getPendingCount()));
+
+        return result;
+    }
 }

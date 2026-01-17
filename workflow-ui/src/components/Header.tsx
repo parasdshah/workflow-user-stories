@@ -1,6 +1,6 @@
-import { Group, Button, Title, Container, Paper } from '@mantine/core';
+import { Group, Button, Title, Container, Paper, Menu } from '@mantine/core';
 import { useNavigate } from 'react-router-dom';
-import { IconList, IconHistory, IconInbox, IconFileAnalytics } from '@tabler/icons-react';
+import { IconList, IconHistory, IconInbox, IconFileAnalytics, IconSettings, IconChartBar, IconDeviceDesktop, IconGavel, IconPackage, IconUsers } from '@tabler/icons-react';
 import ServiceHealth from './ServiceHealth';
 
 function Header() {
@@ -20,22 +20,48 @@ function Header() {
                         <Button variant="subtle" leftSection={<IconHistory size={16} />} onClick={() => navigate('/deployments')}>
                             Deployments
                         </Button>
-                        <Button variant="subtle" leftSection={<IconInbox size={16} />} onClick={() => navigate('/inbox')}>
-                            Task Inbox
-                        </Button>
-                        <Button variant="subtle" leftSection={<IconList size={16} />} onClick={() => navigate('/screens')}>
-                            Screens
-                        </Button>
-                        <Button variant="subtle" leftSection={<IconFileAnalytics size={16} />} onClick={() => navigate('/audit')}>
-                            Audit Log
-                        </Button>
-                        <Button variant="subtle" leftSection={<IconList size={16} />} onClick={() => navigate('/rules')}>
-                            Rules
-                        </Button>
-                        <Button variant="subtle" leftSection={<IconList size={16} />} onClick={() => navigate('/modules')}>
-                            Modules
-                        </Button>
-                        <Button variant="subtle" leftSection={<IconList size={16} />} onClick={() => navigate('/admin/hrms')}>
+
+                        {/* Tasks Menu */}
+                        <Menu shadow="md" width={200}>
+                            <Menu.Target>
+                                <Button variant="subtle" leftSection={<IconInbox size={16} />}>
+                                    Tasks
+                                </Button>
+                            </Menu.Target>
+                            <Menu.Dropdown>
+                                <Menu.Item leftSection={<IconInbox size={14} />} onClick={() => navigate('/inbox')}>
+                                    Inbox
+                                </Menu.Item>
+                                <Menu.Item leftSection={<IconChartBar size={14} />} onClick={() => navigate('/workload')}>
+                                    Workload Dashboard
+                                </Menu.Item>
+                            </Menu.Dropdown>
+                        </Menu>
+
+                        {/* Configuration Menu */}
+                        <Menu shadow="md" width={200}>
+                            <Menu.Target>
+                                <Button variant="subtle" leftSection={<IconSettings size={16} />}>
+                                    Configuration
+                                </Button>
+                            </Menu.Target>
+                            <Menu.Dropdown>
+                                <Menu.Item leftSection={<IconDeviceDesktop size={14} />} onClick={() => navigate('/screens')}>
+                                    Screens
+                                </Menu.Item>
+                                <Menu.Item leftSection={<IconFileAnalytics size={14} />} onClick={() => navigate('/audit')}>
+                                    Audit Log
+                                </Menu.Item>
+                                <Menu.Item leftSection={<IconGavel size={14} />} onClick={() => navigate('/rules')}>
+                                    Rules
+                                </Menu.Item>
+                                <Menu.Item leftSection={<IconPackage size={14} />} onClick={() => navigate('/modules')}>
+                                    Modules
+                                </Menu.Item>
+                            </Menu.Dropdown>
+                        </Menu>
+
+                        <Button variant="subtle" leftSection={<IconUsers size={16} />} onClick={() => navigate('/admin/hrms')}>
                             HRMS Console
                         </Button>
                     </Group>
