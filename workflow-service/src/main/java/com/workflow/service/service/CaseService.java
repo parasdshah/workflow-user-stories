@@ -473,6 +473,14 @@ public class CaseService {
                 .processInstanceId(processInstanceId)
                 .list();
 
+        // Optimize: Fetch all historic tasks for this instance to get variables (savedAssignee)
+        List<HistoricTaskInstance> historicTasks = historyService.createHistoricTaskInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .includeTaskLocalVariables()
+                .list();
+        Map<String, HistoricTaskInstance> taskMap = historicTasks.stream()
+                .collect(java.util.stream.Collectors.toMap(HistoricTaskInstance::getId, t -> t));
+
         for (HistoricActivityInstance activity : activities) {
             String nodeId = prefix + "_" + activity.getActivityId();
             
@@ -489,8 +497,17 @@ public class CaseService {
             }
 
             // Collect Assignee
-            if (activity.getAssignee() != null) {
-                info.assignees.add(activity.getAssignee());
+            String assignee = activity.getAssignee();
+            if (assignee == null && activity.getTaskId() != null) {
+                // Fallback: Check task local variables
+                HistoricTaskInstance task = taskMap.get(activity.getTaskId());
+                if (task != null && task.getTaskLocalVariables() != null && task.getTaskLocalVariables().containsKey("savedAssignee")) {
+                    assignee = (String) task.getTaskLocalVariables().get("savedAssignee");
+                }
+            }
+
+            if (assignee != null) {
+                info.assignees.add(assignee);
             }
 
             // Recurse for Call Activities
