@@ -55,6 +55,7 @@ public class RoundRobinAssignmentListener implements TaskListener {
                 .processDefinitionKey(processDefinitionKey)
                 .taskDefinitionKey(delegateTask.getTaskDefinitionKey())
                 .finished()
+                .includeTaskLocalVariables() // Fetch local vars to get savedAssignee
                 .orderByHistoricTaskInstanceEndTime().desc()
                 .listPage(0, 1);
             
@@ -62,7 +63,15 @@ public class RoundRobinAssignmentListener implements TaskListener {
             String lastAssignee = null;
 
             if (!lastTasks.isEmpty()) {
-                lastAssignee = lastTasks.get(0).getAssignee();
+                HistoricTaskInstance lastTask = lastTasks.get(0);
+                lastAssignee = lastTask.getAssignee();
+                
+                // Fallback to savedAssignee if standard assignee is null (handling known persistence issue)
+                if (lastAssignee == null && lastTask.getTaskLocalVariables() != null && lastTask.getTaskLocalVariables().containsKey("savedAssignee")) {
+                    lastAssignee = (String) lastTask.getTaskLocalVariables().get("savedAssignee");
+                    log.info("Round Robin: Recovered last assignee {} from variable", lastAssignee);
+                }
+                
                 log.info("Round Robin: Found last assignee: {}", lastAssignee);
                 
                 if (lastAssignee != null) {
