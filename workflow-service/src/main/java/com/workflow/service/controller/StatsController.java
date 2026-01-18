@@ -26,4 +26,11 @@ public class StatsController {
     public ResponseEntity<List<UserWorkloadDTO>> getUserWorkload() {
         return ResponseEntity.ok(caseService.getUserWorkload());
     }
+
+    @Operation(summary = "Get user storyboard", description = "Retrieves backlog of tasks (New, WIP, Closed) for storyboard view")
+    @ApiResponse(responseCode = "200", description = "Successfully retrieved storyboard")
+    @GetMapping("/storyboard")
+    public ResponseEntity<List<com.workflow.service.dto.UserStoryboardDTO>> getUserStoryboard() {
+        return ResponseEntity.ok(caseService.getUserStoryboard());
+    }
 }

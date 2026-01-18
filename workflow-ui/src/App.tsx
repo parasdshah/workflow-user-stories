@@ -5,6 +5,7 @@ import WorkflowEditor from './pages/WorkflowEditor';
 import DeploymentHistory from './pages/DeploymentHistory';
 import TaskInbox from './pages/TaskInbox';
 import UserWorkload from './pages/UserWorkload';
+import UserWorkloadStoryboard from './pages/UserWorkloadStoryboard';
 import DiagramPreview from './pages/DiagramPreview';
 import { ScreenDefinitionList } from './components/screens/ScreenDefinitionList';
 import { ScreenDefinitionEditor } from './components/screens/ScreenDefinitionEditor';
@@ -27,6 +28,7 @@ function App() {
           <Route path="/deployments" element={<DeploymentHistory />} />
           <Route path="/inbox" element={<TaskInbox />} />
           <Route path="/workload" element={<UserWorkload />} />
+          <Route path="/storyboard" element={<UserWorkloadStoryboard />} />
           <Route path="/preview/:code" element={<DiagramPreview />} />
           <Route path="/screens" element={<ScreenDefinitionList />} />
           <Route path="/screens/:code" element={<ScreenDefinitionEditor />} />

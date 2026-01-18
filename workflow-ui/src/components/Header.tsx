@@ -35,6 +35,9 @@ function Header() {
                                 <Menu.Item leftSection={<IconChartBar size={14} />} onClick={() => navigate('/workload')}>
                                     Workload Dashboard
                                 </Menu.Item>
+                                <Menu.Item leftSection={<IconChartBar size={14} />} onClick={() => navigate('/storyboard')}>
+                                    Workload Storyboard
+                                </Menu.Item>
                             </Menu.Dropdown>
                         </Menu>
 

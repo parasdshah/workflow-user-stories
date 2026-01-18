@@ -665,4 +665,103 @@ public class CaseService {
 
         return result;
     }
+    public List<com.workflow.service.dto.UserStoryboardDTO> getUserStoryboard() {
+        // 1. Fetch Active Tasks
+        List<Task> activeTasks = taskService.createTaskQuery()
+                .active()
+                .includeProcessVariables()
+                .includeTaskLocalVariables()
+                .orderByTaskCreateTime().desc()
+                .list();
+
+        // 2. Fetch Closed Tasks (Recent 1000)
+        List<HistoricTaskInstance> historyTasks = historyService.createHistoricTaskInstanceQuery()
+                .finished()
+                .includeProcessVariables()
+                .orderByHistoricTaskInstanceEndTime().desc()
+                .listPage(0, 1000);
+
+        // 3. Group Active Tasks (New vs WIP)
+        Map<String, List<Task>> newByAssignee = new HashMap<>();
+        Map<String, List<Task>> wipByAssignee = new HashMap<>();
+
+        for (Task task : activeTasks) {
+            if (task.getAssignee() == null) continue;
+            
+            Object status = task.getTaskLocalVariables().get("status");
+            if (status != null && !status.toString().isEmpty()) {
+                wipByAssignee.computeIfAbsent(task.getAssignee(), k -> new ArrayList<>()).add(task);
+            } else {
+                newByAssignee.computeIfAbsent(task.getAssignee(), k -> new ArrayList<>()).add(task);
+            }
+        }
+
+        // 4. Group Closed Tasks
+        Map<String, List<HistoricTaskInstance>> closedByAssignee = historyTasks.stream()
+                .filter(t -> t.getAssignee() != null)
+                .collect(java.util.stream.Collectors.groupingBy(HistoricTaskInstance::getAssignee));
+
+        // 5. Build DTOs
+        Set<String> allUsers = new HashSet<>();
+        allUsers.addAll(newByAssignee.keySet());
+        allUsers.addAll(wipByAssignee.keySet());
+        allUsers.addAll(closedByAssignee.keySet());
+
+        if (allUsers.isEmpty()) return Collections.emptyList();
+
+        Map<String, String> userNames = userAdapterClient.searchUsers(new ArrayList<>(allUsers));
+        List<com.workflow.service.dto.UserStoryboardDTO> result = new ArrayList<>();
+
+        for (String userId : allUsers) {
+            String userName = userNames.getOrDefault(userId, userId);
+
+            // Mapper Helper
+            java.util.function.Function<Task, com.workflow.service.dto.UserStoryboardDTO.TaskSummaryDTO> activeMapper = t -> {
+                String workflowName = (String) t.getProcessVariables().get("workflowName");
+                if (workflowName == null) workflowName = t.getProcessDefinitionId().split(":")[0];
+                String status = (String) t.getTaskLocalVariables().get("status");
+                
+                return com.workflow.service.dto.UserStoryboardDTO.TaskSummaryDTO.builder()
+                        .taskId(t.getId())
+                        .caseId(t.getProcessInstanceId())
+                        .stageName(t.getName())
+                        .stageCode(t.getTaskDefinitionKey())
+                        .createdTime(LocalDateTime.ofInstant(t.getCreateTime().toInstant(), ZoneId.systemDefault()))
+                        .dueDate(t.getDueDate() != null ? LocalDateTime.ofInstant(t.getDueDate().toInstant(), ZoneId.systemDefault()) : null)
+                        .workflowName(workflowName)
+                        .status(status)
+                        .build();
+            };
+
+             java.util.function.Function<HistoricTaskInstance, com.workflow.service.dto.UserStoryboardDTO.TaskSummaryDTO> historyMapper = t -> {
+                String workflowName = (String) t.getProcessVariables().get("workflowName");
+                if (workflowName == null) workflowName = t.getProcessDefinitionId().split(":")[0];
+                
+                return com.workflow.service.dto.UserStoryboardDTO.TaskSummaryDTO.builder()
+                        .taskId(t.getId())
+                        .caseId(t.getProcessInstanceId())
+                        .stageName(t.getName())
+                        .stageCode(t.getTaskDefinitionKey())
+                        .createdTime(LocalDateTime.ofInstant(t.getCreateTime().toInstant(), ZoneId.systemDefault()))
+                        .endTime(t.getEndTime() != null ? LocalDateTime.ofInstant(t.getEndTime().toInstant(), ZoneId.systemDefault()) : null)
+                        .workflowName(workflowName)
+                        .status("Completed")
+                        .build();
+            };
+
+            List<com.workflow.service.dto.UserStoryboardDTO.TaskSummaryDTO> newDto = newByAssignee.getOrDefault(userId, Collections.emptyList()).stream().map(activeMapper).collect(java.util.stream.Collectors.toList());
+            List<com.workflow.service.dto.UserStoryboardDTO.TaskSummaryDTO> wipDto = wipByAssignee.getOrDefault(userId, Collections.emptyList()).stream().map(activeMapper).collect(java.util.stream.Collectors.toList());
+            List<com.workflow.service.dto.UserStoryboardDTO.TaskSummaryDTO> closedDto = closedByAssignee.getOrDefault(userId, Collections.emptyList()).stream().map(historyMapper).collect(java.util.stream.Collectors.toList());
+
+            result.add(com.workflow.service.dto.UserStoryboardDTO.builder()
+                    .userId(userId)
+                    .userName(userName)
+                    .newTasks(newDto)
+                    .wipTasks(wipDto)
+                    .closedTasks(closedDto)
+                    .build());
+        }
+        
+        return result;
+    }
 }
