@@ -1,4 +1,4 @@
-import { Timeline, Text, Badge, Card, Button, Group, Collapse, Loader, Modal, JsonInput } from '@mantine/core';
+import { Timeline, Text, Badge, Card, Button, Group, Collapse, Loader, Modal, JsonInput, Select } from '@mantine/core';
 import { IconCheck, IconCircleDashed, IconPlayerPlay, IconX, IconChevronDown, IconChevronRight } from '@tabler/icons-react';
 import { useState, useEffect } from 'react';
 
@@ -128,18 +128,90 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
 
     const [modalOpen, setModalOpen] = useState(false);
     const [jsonInput, setJsonInput] = useState('{}');
-    const [pendingAction, setPendingAction] = useState<{ taskId: string, outcome?: string } | null>(null);
+    const [pendingAction, setPendingAction] = useState<{ taskId: string, outcome?: string, manualReq?: boolean } | null>(null);
 
-    const initiateAction = (taskId: string, outcome?: string) => {
-        // Open confirmation modal with JSON input
-        setPendingAction({ taskId, outcome });
+    // Manual Assignment State
+    const [manualAssignee, setManualAssignee] = useState<string | null>(null);
+    const [manualUsers, setManualUsers] = useState<any[]>([]);
+    const [manualLoading, setManualLoading] = useState(false);
+
+    const initiateAction = (taskId: string, outcome?: string, allowedActionsJson?: string) => {
+        // Check for Manual Assignment Requirement
+        let requiresManual = false;
+        let groupName = '';
+
+        if (allowedActionsJson && outcome) {
+            try {
+                const actions = JSON.parse(allowedActionsJson);
+                const actionDef = Array.isArray(actions) ? actions.find((a: any) =>
+                    (a.value === outcome || a.label === outcome)
+                ) : null;
+
+                if (actionDef && actionDef.requiresManualAssignment) {
+                    requiresManual = true;
+                    groupName = actionDef.assignmentGroup;
+                }
+            } catch (e) {
+                console.warn("Failed to check manual assignment req", e);
+            }
+        }
+
+        setPendingAction({ taskId, outcome, manualReq: requiresManual });
         setJsonInput('{\n  \n}');
+        setManualAssignee(null);
+
+        if (requiresManual) {
+            setManualLoading(true);
+            // Fetch users for the group
+            // Ideally use an API that filters by Role/Group
+            // Since we don't have a direct "Get Users By Role" exposed in UI easily, 
+            // we might fallback to fetching all (or assume /api/hrms/users?role=X works)
+            // Let's assume the standard /api/hrms/users handles basic listing or we use specific endpoint
+            fetch(`/api/hrms/employees`)
+                .then(res => res.json())
+                .then(data => {
+                    if (Array.isArray(data)) {
+                        // Client-side filtering if 'role' or 'department' matches groupName
+                        // If groupName is provided, we try to filter. 
+                        // Note: Employee structure might differ, assumign 'role' or 'department' field exists.
+                        const filtered = groupName
+                            ? data.filter((u: any) => u.roleCode === groupName || u.department === groupName || !groupName)
+                            : data;
+
+                        setManualUsers(filtered.map((u: any) => ({ value: u.userId || u.employeeId, label: u.fullName || u.employeeName || u.userId })));
+                    } else {
+                        setManualUsers([]);
+                    }
+                })
+                .catch(err => {
+                    console.error("Failed to load manual assignees", err);
+                    setManualUsers([]);
+                })
+                .finally(() => setManualLoading(false));
+        }
+
         setModalOpen(true);
     };
 
     const confirmAction = () => {
         if (pendingAction && onAction) {
-            onAction(pendingAction.taskId, pendingAction.outcome, jsonInput);
+            let extraVars = {};
+            try {
+                extraVars = JSON.parse(jsonInput);
+            } catch (e) {
+                alert("Invalid JSON");
+                return;
+            }
+
+            if (pendingAction.manualReq) {
+                if (!manualAssignee) {
+                    alert("Please select an assignee.");
+                    return;
+                }
+                extraVars = { ...extraVars, manualAssignee: manualAssignee };
+            }
+
+            onAction(pendingAction.taskId, pendingAction.outcome, JSON.stringify(extraVars));
         }
         setModalOpen(false);
         setPendingAction(null);
@@ -249,7 +321,7 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
                                                             variant={actionStyle === 'default' ? 'default' : 'outline'}
                                                             color={actionStyle === 'default' ? undefined : color}
 
-                                                            onClick={() => initiateAction(stage.taskId!, value)}
+                                                            onClick={() => initiateAction(stage.taskId!, value, stage.allowedActions)}
                                                         >
                                                             {label}
                                                         </Button>
@@ -271,7 +343,7 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
                                                 ));
                                             }
                                         })() : (
-                                            <Button size="xs" variant="outline" onClick={() => initiateAction(stage.taskId!)}>
+                                            <Button size="xs" variant="outline" onClick={() => initiateAction(stage.taskId!, undefined, stage.allowedActions)}>
                                                 Complete
                                             </Button>
                                         )}
@@ -305,6 +377,22 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
             </Timeline>
 
             <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title="Confirm Action">
+                {pendingAction?.manualReq && (
+                    <Card withBorder mb="md" p="xs" bg="blue.0">
+                        <Text size="sm" fw={500} mb="xs">Select Next Assignee</Text>
+                        {manualLoading ? <Loader size="sm" /> : (
+                            <Select
+                                data={manualUsers}
+                                placeholder="Search User..."
+                                searchable
+                                value={manualAssignee}
+                                onChange={setManualAssignee}
+                                description="This action requires you to manually select who handles the next stage."
+                            />
+                        )}
+                    </Card>
+                )}
+
                 <Text size="sm" mb="sm">Provide any process variables (JSON) for this action:</Text>
                 <JsonInput
                     label="Process Variables"

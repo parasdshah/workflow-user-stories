@@ -106,7 +106,8 @@ export function AssignmentBuilder({ value, onChange }: AssignmentBuilderProps) {
                     data={[
                         { label: 'Group Queue', value: 'GROUP' },
                         { label: 'Round Robin', value: 'ROUND_ROBIN' },
-                        { label: 'Matrix Rules', value: 'MATRIX' }
+                        { label: 'Matrix Rules', value: 'MATRIX' },
+                        { label: 'Manual', value: 'MANUAL' }
                     ]}
                 />
             </Paper>
@@ -136,6 +137,23 @@ export function AssignmentBuilder({ value, onChange }: AssignmentBuilderProps) {
                         onChange={(val) => handleGroupChange(val || '')}
                     />
                     <Text size="xs" c="dimmed" mt={5}>Tasks will be automatically assigned to members of this group in turns.</Text>
+                </Card>
+            )}
+
+            {mechanism === 'MANUAL' && (
+                <Card withBorder p="sm">
+                    <Text size="sm" mb={5}>Manual Assignment Logic</Text>
+                    <Select
+                        label="Assignee Candidate Group"
+                        placeholder="Select Group/Role"
+                        data={roleOptions}
+                        searchable
+                        value={groupName}
+                        onChange={(val) => handleGroupChange(val || '')}
+                    />
+                    <Text size="xs" c="dimmed" mt={5}>
+                        The user completing the previous task will see a dropdown to manually select a specific user from this group.
+                    </Text>
                 </Card>
             )}
 

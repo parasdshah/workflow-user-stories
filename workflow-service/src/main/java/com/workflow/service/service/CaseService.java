@@ -118,7 +118,7 @@ public class CaseService {
 
         log.info("Found {} historic tasks for case {}", historicTasks.size(), caseId);
         for (HistoricTaskInstance task : historicTasks) {
-            log.info("Historic Task: ID={}, Name={}, Assignee={}, EndTime={}", 
+            log.info("Historic Task: ID={}, Name={}, Assignee={}, EndTime={}",
                     task.getId(), task.getName(), task.getAssignee(), task.getEndTime());
             stages.add(mapToStageDTO(task, "COMPLETED"));
         }
@@ -199,16 +199,17 @@ public class CaseService {
 
             // Backup Assignee to Variable to guarantee persistence in history
             if (currentAssignee != null && !currentAssignee.trim().isEmpty()) {
-                 taskService.setVariableLocal(taskId, "savedAssignee", currentAssignee);
+                taskService.setVariableLocal(taskId, "savedAssignee", currentAssignee);
             }
 
             // Logic to preserve or claim assignee
             if (currentAssignee == null || currentAssignee.trim().isEmpty()) {
                 log.info("Task {} is unassigned. Auto-claim for user {}", taskId, userId);
-                taskService.setAssignee(taskId, userId); 
+                taskService.setAssignee(taskId, userId);
                 taskService.setVariableLocal(taskId, "savedAssignee", userId); // Ensure we save the claimed user
             } else {
-                 // Force persistence attempt (keep for good measure, though variable is the real fix)
+                // Force persistence attempt (keep for good measure, though variable is the real
+                // fix)
                 taskService.setAssignee(taskId, currentAssignee);
             }
 
@@ -326,9 +327,10 @@ public class CaseService {
     private StageDTO mapToStageDTO(HistoricTaskInstance task, String status) {
         // Fallback Logic for Assignee
         String assignee = task.getAssignee();
-        if (assignee == null && task.getTaskLocalVariables() != null && task.getTaskLocalVariables().containsKey("savedAssignee")) {
-             assignee = (String) task.getTaskLocalVariables().get("savedAssignee");
-             log.info("Recovered assignee {} from savedAssignee variable for task {}", assignee, task.getId());
+        if (assignee == null && task.getTaskLocalVariables() != null
+                && task.getTaskLocalVariables().containsKey("savedAssignee")) {
+            assignee = (String) task.getTaskLocalVariables().get("savedAssignee");
+            log.info("Recovered assignee {} from savedAssignee variable for task {}", assignee, task.getId());
         }
 
         StageDTO dto = mapCommonTaskInfo(task.getName(), task.getTaskDefinitionKey(), assignee,
@@ -456,8 +458,8 @@ public class CaseService {
                 // Map IDs to Names
                 Map<String, String> finalNames = resolvedNames;
                 List<String> names = info.assignees.stream()
-                    .map(id -> finalNames.getOrDefault(id, id))
-                    .collect(java.util.stream.Collectors.toList());
+                        .map(id -> finalNames.getOrDefault(id, id))
+                        .collect(java.util.stream.Collectors.toList());
                 newData.put("assignee", String.join(", ", names));
                 newData.put("assigneeIds", info.assignees); // Keep IDs if needed
             }
@@ -473,7 +475,8 @@ public class CaseService {
                 .processInstanceId(processInstanceId)
                 .list();
 
-        // Optimize: Fetch all historic tasks for this instance to get variables (savedAssignee)
+        // Optimize: Fetch all historic tasks for this instance to get variables
+        // (savedAssignee)
         List<HistoricTaskInstance> historicTasks = historyService.createHistoricTaskInstanceQuery()
                 .processInstanceId(processInstanceId)
                 .includeTaskLocalVariables()
@@ -483,12 +486,13 @@ public class CaseService {
 
         for (HistoricActivityInstance activity : activities) {
             String nodeId = prefix + "_" + activity.getActivityId();
-            
+
             NodeRuntimeInfo info = infoMap.computeIfAbsent(nodeId, k -> new NodeRuntimeInfo("PENDING"));
 
-            // Status Logic: If any instance is Active -> Active. Else if any Completed -> Completed.
+            // Status Logic: If any instance is Active -> Active. Else if any Completed ->
+            // Completed.
             String currentStatus = (activity.getEndTime() != null) ? "COMPLETED" : "ACTIVE";
-            
+
             // Priority: ACTIVE > COMPLETED > PENDING
             if ("ACTIVE".equals(currentStatus)) {
                 info.status = "ACTIVE";
@@ -501,7 +505,8 @@ public class CaseService {
             if (assignee == null && activity.getTaskId() != null) {
                 // Fallback: Check task local variables
                 HistoricTaskInstance task = taskMap.get(activity.getTaskId());
-                if (task != null && task.getTaskLocalVariables() != null && task.getTaskLocalVariables().containsKey("savedAssignee")) {
+                if (task != null && task.getTaskLocalVariables() != null
+                        && task.getTaskLocalVariables().containsKey("savedAssignee")) {
                     assignee = (String) task.getTaskLocalVariables().get("savedAssignee");
                 }
             }
@@ -516,13 +521,13 @@ public class CaseService {
             }
         }
     }
-    
+
     @lombok.Data
     @lombok.AllArgsConstructor
     private static class NodeRuntimeInfo {
         String status;
         Set<String> assignees = new HashSet<>();
-        
+
         public NodeRuntimeInfo(String status) {
             this.status = status;
         }
@@ -555,18 +560,45 @@ public class CaseService {
                                 if (config.getActions() != null && !config.getActions().isEmpty()) {
                                     try {
                                         // Map to list of simple maps for JSON compatibility
-                                        java.util.List<java.util.Map<String, String>> actionMaps = config.getActions()
-                                                .stream()
-                                                .map(a -> {
-                                                    java.util.Map<String, String> m = new java.util.HashMap<>();
-                                                    m.put("label", a.getActionLabel());
-                                                    m.put("value", a.getActionLabel()); // Use label as value
-                                                    m.put("style", a.getButtonStyle());
-                                                    m.put("target", a.getTargetType());
-                                                    m.put("postStatus", a.getPostActionStatus());
-                                                    return m;
-                                                })
-                                                .collect(java.util.stream.Collectors.toList());
+                                        // US-2: Enrich with Manual Assignment Requirements
+                                        java.util.List<java.util.Map<String, Object>> actionMaps = new java.util.ArrayList<>();
+
+                                        for (com.workflow.service.entity.StageAction a : config.getActions()) {
+                                            java.util.Map<String, Object> m = new java.util.HashMap<>();
+                                            m.put("label", a.getActionLabel());
+                                            m.put("value", a.getActionLabel());
+                                            m.put("style", a.getButtonStyle());
+                                            m.put("target", a.getTargetType());
+                                            m.put("postStatus", a.getPostActionStatus());
+
+                                            // Lookahead for Manual Assignment
+                                            if ("SPECIFIC".equals(a.getTargetType()) && a.getTargetStage() != null) {
+                                                stageConfigRepository
+                                                        .findByWorkflowCodeAndStageCode(pd.getKey(), a.getTargetStage())
+                                                        .ifPresent(targetConfig -> {
+                                                            if (targetConfig.getAssignmentRules() != null) {
+                                                                try {
+                                                                    java.util.Map<String, Object> rules = new com.fasterxml.jackson.databind.ObjectMapper()
+                                                                            .readValue(
+                                                                                    targetConfig.getAssignmentRules(),
+                                                                                    new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, Object>>() {
+                                                                                    });
+
+                                                                    if ("MANUAL".equals(rules.get("mechanism"))) {
+                                                                        m.put("requiresManualAssignment", true);
+                                                                        m.put("assignmentGroup",
+                                                                                rules.get("groupName"));
+                                                                    }
+                                                                } catch (Exception ex) {
+                                                                    // ignore parse error
+                                                                }
+                                                            }
+                                                        });
+                                            }
+
+                                            actionMaps.add(m);
+                                        }
+
                                         dto.setAllowedActions(new com.fasterxml.jackson.databind.ObjectMapper()
                                                 .writeValueAsString(actionMaps));
                                     } catch (Exception e) {
@@ -585,13 +617,13 @@ public class CaseService {
 
     private void resolveAssigneeNames(List<StageDTO> stages) {
         List<String> assignees = stages.stream()
-            .map(StageDTO::getAssignee)
-            .filter(Objects::nonNull)
-            .distinct()
-            .collect(java.util.stream.Collectors.toList());
+                .map(StageDTO::getAssignee)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(java.util.stream.Collectors.toList());
 
         log.info("Resolving names for assignees: {}", assignees);
-            
+
         if (!assignees.isEmpty()) {
             Map<String, String> names = userAdapterClient.searchUsers(assignees);
             log.info("Resolved names map: {}", names);
@@ -605,6 +637,7 @@ public class CaseService {
             }
         }
     }
+
     public List<com.workflow.service.dto.UserWorkloadDTO> getUserWorkload() {
         // 1. Fetch ALL active user tasks
         List<Task> activeTasks = taskService.createTaskQuery()
@@ -627,7 +660,7 @@ public class CaseService {
 
         // 4. Map to DTO
         List<com.workflow.service.dto.UserWorkloadDTO> result = new ArrayList<>();
-        
+
         for (Map.Entry<String, List<Task>> entry : tasksByAssignee.entrySet()) {
             String userId = entry.getKey();
             List<Task> tasks = entry.getValue();
@@ -637,7 +670,7 @@ public class CaseService {
                     .map(t -> {
                         String workflowName = (String) t.getProcessVariables().get("workflowName");
                         if (workflowName == null) {
-                             workflowName = t.getProcessDefinitionId().split(":")[0];
+                            workflowName = t.getProcessDefinitionId().split(":")[0];
                         }
 
                         return com.workflow.service.dto.UserWorkloadDTO.TaskSummaryDTO.builder()
@@ -645,8 +678,11 @@ public class CaseService {
                                 .caseId(t.getProcessInstanceId())
                                 .stageName(t.getName())
                                 .stageCode(t.getTaskDefinitionKey())
-                                .createdTime(LocalDateTime.ofInstant(t.getCreateTime().toInstant(), ZoneId.systemDefault()))
-                                .dueDate(t.getDueDate() != null ? LocalDateTime.ofInstant(t.getDueDate().toInstant(), ZoneId.systemDefault()) : null)
+                                .createdTime(
+                                        LocalDateTime.ofInstant(t.getCreateTime().toInstant(), ZoneId.systemDefault()))
+                                .dueDate(t.getDueDate() != null
+                                        ? LocalDateTime.ofInstant(t.getDueDate().toInstant(), ZoneId.systemDefault())
+                                        : null)
                                 .workflowName(workflowName)
                                 .build();
                     })
@@ -665,6 +701,7 @@ public class CaseService {
 
         return result;
     }
+
     public List<com.workflow.service.dto.UserStoryboardDTO> getUserStoryboard() {
         // 1. Fetch Active Tasks
         List<Task> activeTasks = taskService.createTaskQuery()
@@ -686,8 +723,9 @@ public class CaseService {
         Map<String, List<Task>> wipByAssignee = new HashMap<>();
 
         for (Task task : activeTasks) {
-            if (task.getAssignee() == null) continue;
-            
+            if (task.getAssignee() == null)
+                continue;
+
             Object status = task.getTaskLocalVariables().get("status");
             if (status != null && !status.toString().isEmpty()) {
                 wipByAssignee.computeIfAbsent(task.getAssignee(), k -> new ArrayList<>()).add(task);
@@ -707,7 +745,8 @@ public class CaseService {
         allUsers.addAll(wipByAssignee.keySet());
         allUsers.addAll(closedByAssignee.keySet());
 
-        if (allUsers.isEmpty()) return Collections.emptyList();
+        if (allUsers.isEmpty())
+            return Collections.emptyList();
 
         Map<String, String> userNames = userAdapterClient.searchUsers(new ArrayList<>(allUsers));
         List<com.workflow.service.dto.UserStoryboardDTO> result = new ArrayList<>();
@@ -718,40 +757,52 @@ public class CaseService {
             // Mapper Helper
             java.util.function.Function<Task, com.workflow.service.dto.UserStoryboardDTO.TaskSummaryDTO> activeMapper = t -> {
                 String workflowName = (String) t.getProcessVariables().get("workflowName");
-                if (workflowName == null) workflowName = t.getProcessDefinitionId().split(":")[0];
+                if (workflowName == null)
+                    workflowName = t.getProcessDefinitionId().split(":")[0];
                 String status = (String) t.getTaskLocalVariables().get("status");
-                
+
                 return com.workflow.service.dto.UserStoryboardDTO.TaskSummaryDTO.builder()
                         .taskId(t.getId())
                         .caseId(t.getProcessInstanceId())
                         .stageName(t.getName())
                         .stageCode(t.getTaskDefinitionKey())
                         .createdTime(LocalDateTime.ofInstant(t.getCreateTime().toInstant(), ZoneId.systemDefault()))
-                        .dueDate(t.getDueDate() != null ? LocalDateTime.ofInstant(t.getDueDate().toInstant(), ZoneId.systemDefault()) : null)
+                        .dueDate(t.getDueDate() != null
+                                ? LocalDateTime.ofInstant(t.getDueDate().toInstant(), ZoneId.systemDefault())
+                                : null)
                         .workflowName(workflowName)
                         .status(status)
                         .build();
             };
 
-             java.util.function.Function<HistoricTaskInstance, com.workflow.service.dto.UserStoryboardDTO.TaskSummaryDTO> historyMapper = t -> {
+            java.util.function.Function<HistoricTaskInstance, com.workflow.service.dto.UserStoryboardDTO.TaskSummaryDTO> historyMapper = t -> {
                 String workflowName = (String) t.getProcessVariables().get("workflowName");
-                if (workflowName == null) workflowName = t.getProcessDefinitionId().split(":")[0];
-                
+                if (workflowName == null)
+                    workflowName = t.getProcessDefinitionId().split(":")[0];
+
                 return com.workflow.service.dto.UserStoryboardDTO.TaskSummaryDTO.builder()
                         .taskId(t.getId())
                         .caseId(t.getProcessInstanceId())
                         .stageName(t.getName())
                         .stageCode(t.getTaskDefinitionKey())
                         .createdTime(LocalDateTime.ofInstant(t.getCreateTime().toInstant(), ZoneId.systemDefault()))
-                        .endTime(t.getEndTime() != null ? LocalDateTime.ofInstant(t.getEndTime().toInstant(), ZoneId.systemDefault()) : null)
+                        .endTime(t.getEndTime() != null
+                                ? LocalDateTime.ofInstant(t.getEndTime().toInstant(), ZoneId.systemDefault())
+                                : null)
                         .workflowName(workflowName)
                         .status("Completed")
                         .build();
             };
 
-            List<com.workflow.service.dto.UserStoryboardDTO.TaskSummaryDTO> newDto = newByAssignee.getOrDefault(userId, Collections.emptyList()).stream().map(activeMapper).collect(java.util.stream.Collectors.toList());
-            List<com.workflow.service.dto.UserStoryboardDTO.TaskSummaryDTO> wipDto = wipByAssignee.getOrDefault(userId, Collections.emptyList()).stream().map(activeMapper).collect(java.util.stream.Collectors.toList());
-            List<com.workflow.service.dto.UserStoryboardDTO.TaskSummaryDTO> closedDto = closedByAssignee.getOrDefault(userId, Collections.emptyList()).stream().map(historyMapper).collect(java.util.stream.Collectors.toList());
+            List<com.workflow.service.dto.UserStoryboardDTO.TaskSummaryDTO> newDto = newByAssignee
+                    .getOrDefault(userId, Collections.emptyList()).stream().map(activeMapper)
+                    .collect(java.util.stream.Collectors.toList());
+            List<com.workflow.service.dto.UserStoryboardDTO.TaskSummaryDTO> wipDto = wipByAssignee
+                    .getOrDefault(userId, Collections.emptyList()).stream().map(activeMapper)
+                    .collect(java.util.stream.Collectors.toList());
+            List<com.workflow.service.dto.UserStoryboardDTO.TaskSummaryDTO> closedDto = closedByAssignee
+                    .getOrDefault(userId, Collections.emptyList()).stream().map(historyMapper)
+                    .collect(java.util.stream.Collectors.toList());
 
             result.add(com.workflow.service.dto.UserStoryboardDTO.builder()
                     .userId(userId)
@@ -761,7 +812,7 @@ public class CaseService {
                     .closedTasks(closedDto)
                     .build());
         }
-        
+
         return result;
     }
 }

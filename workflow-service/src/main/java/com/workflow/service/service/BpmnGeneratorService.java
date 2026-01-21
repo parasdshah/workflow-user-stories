@@ -49,7 +49,7 @@ public class BpmnGeneratorService {
         // Sort stages by sequence
         List<StageConfig> sortedStages = new ArrayList<>(stages);
         sortedStages.sort((s1, s2) -> s1.getSequenceOrder().compareTo(s2.getSequenceOrder()));
-        
+
         // Use sortedStages instead of stages below
         stages = sortedStages;
 
@@ -72,17 +72,18 @@ public class BpmnGeneratorService {
 
         for (int i = 0; i < groups.size(); i++) {
             List<StageConfig> currentGroup = groups.get(i);
-            
+
             // Determine Next Group Entry for Lookahead
             FlowElement nextGroupEntry = null;
             StageConfig nextGroupFirstStage = null;
-            
+
             if (i + 1 < groups.size()) {
                 List<StageConfig> nextGroup = groups.get(i + 1);
                 nextGroupFirstStage = nextGroup.get(0);
                 if (nextGroup.size() > 1) {
-                    // Next is Parallel, entry is Split Gateway (not created yet, but we need reference)
-                    // We can create it now or predict ID? 
+                    // Next is Parallel, entry is Split Gateway (not created yet, but we need
+                    // reference)
+                    // We can create it now or predict ID?
                     // Better: Create Gateways just-in-time or create all upfront?
                     // Let's create Gateways inside the loop. But we need to connect TO it.
                     // So we must handle "Exit connects to Next Entry".
@@ -91,29 +92,29 @@ public class BpmnGeneratorService {
                 }
             }
         }
-        
+
         // RESTART LOGIC - Backwards Connecting Model
-        
+
         // Dictionary to hold Group Entry/Exit nodes for inter-group wiring
         // Map<GroupIndex, Pair<Entry, Exit>>
-        
+
         // Pass 1: Create Group Gateways (Split/Join) so they exist
         List<FlowElement> groupEntryNodes = new ArrayList<>();
         List<FlowElement> groupExitNodes = new ArrayList<>();
         int parallelGatewayCounter = 1;
-        
+
         for (List<StageConfig> group : groups) {
             if (group.size() > 1) {
                 ParallelGateway split = new ParallelGateway();
                 split.setId("split_" + parallelGatewayCounter);
                 process.addFlowElement(split);
                 groupEntryNodes.add(split);
-                
+
                 ParallelGateway join = new ParallelGateway();
                 join.setId("join_" + parallelGatewayCounter);
                 process.addFlowElement(join);
                 groupExitNodes.add(join);
-                
+
                 parallelGatewayCounter++;
             } else {
 
@@ -123,23 +124,22 @@ public class BpmnGeneratorService {
                 groupExitNodes.add(el); // Exit is same as Entry for Sequential (Flow logic handles internal branching)
             }
         }
-        
+
         // End Event
         EndEvent end = new EndEvent();
         end.setId("end");
         process.addFlowElement(end);
 
-
         FlowElement lastNode = startEvent;
-        
+
         for (int i = 0; i < groups.size(); i++) {
             List<StageConfig> group = groups.get(i);
             FlowElement entry = groupEntryNodes.get(i);
             FlowElement exit = groupExitNodes.get(i);
-            FlowElement nextNode = (i + 1 < groups.size()) ? groupEntryNodes.get(i+1) : end;
-            
+            FlowElement nextNode = (i + 1 < groups.size()) ? groupEntryNodes.get(i + 1) : end;
+
             // A. Incoming Connection (Last -> Entry)
-             if (lastNode != null) {
+            if (lastNode != null) {
                 if (group.size() > 1) {
                     // Parallel: Connect Last -> Split directly.
                     // Individual Entry Conditions are handled INSIDE the parallel block.
@@ -148,85 +148,85 @@ public class BpmnGeneratorService {
                     // Sequential: Connect Last -> Stage (Handle Entry Condition)
                     StageConfig stage = group.get(0);
                     FlowElement stageEl = entry;
-                    
+
                     // Note: If skipping, where do we go? Next Node.
                     if (stage.getEntryCondition() != null && !stage.getEntryCondition().isBlank()) {
-                        handleEntryCondition(process, lastNode, stageEl, stage, nextNode); 
+                        handleEntryCondition(process, lastNode, stageEl, stage, nextNode);
                     } else {
                         connect(process, lastNode, stageEl);
                     }
                 }
-             }
-            
+            }
+
             // B. Internal Processing & Outbound
             if (group.size() > 1) {
                 // Parallel
                 ParallelGateway split = (ParallelGateway) entry;
                 ParallelGateway join = (ParallelGateway) exit;
-                
+
                 for (StageConfig stage : group) {
                     FlowElement stageEl = stageElements.get(stage.getStageCode());
-                    
+
                     // Split -> Stage (Handle Entry Condition)
                     if (stage.getEntryCondition() != null && !stage.getEntryCondition().isBlank()) {
-                         handleEntryCondition(process, split, stageEl, stage, join); // Skip to Join
+                        handleEntryCondition(process, split, stageEl, stage, join); // Skip to Join
                     } else {
                         connect(process, split, stageEl);
                     }
-                    
+
                     // Stage -> Join (Handle Actions/Routing)
                     handleStageOutbound(process, stage, stageEl, join, stageElements, objectMapper);
                 }
-                
+
                 // Join -> Next (Wait, Loop A of next iteration will connect Join -> Next entry)
                 // So we do NOTHING here for outbound?
                 // lastNode = join.
                 lastNode = join;
-                
+
             } else {
                 // Sequential
                 StageConfig stage = group.get(0);
                 FlowElement stageEl = (FlowElement) entry;
-                
+
                 // Stage -> Next (Handle Actions/Routing)
                 // Logic connects stageEl to nextNode.
                 handleStageOutbound(process, stage, stageEl, nextNode, stageElements, objectMapper);
-                
+
                 // What is 'lastNode' for next iteration?
                 // handleStageOutbound might wire to 'nextNode' via gateways.
                 // But connections are made.
-                // So Next Loop's "Connect Last -> Entry" (Step A) is REDUNDANT/DUPLICATE if we use `lastNode=stageEl`.
-                
-                // If Sequential Stage connects to NextNode via handleStageOutbound, 
+                // So Next Loop's "Connect Last -> Entry" (Step A) is REDUNDANT/DUPLICATE if we
+                // use `lastNode=stageEl`.
+
+                // If Sequential Stage connects to NextNode via handleStageOutbound,
                 // the link is established.
                 // Next iteration Step A will try to connect Last -> Entry.
                 // If we set lastNode = null? Or skip Step A?
-                
+
                 // Alternative: handleStageOutbound does NOT wire the default flow?
                 // No, it handles actions. Default Flow connects to "Next".
-                
+
                 // Solution:
-                // Step A is only needed for Groups that need "Pre-Entry Connection" (like Split).
+                // Step A is only needed for Groups that need "Pre-Entry Connection" (like
+                // Split).
                 // Or if handleStageOutbound didn't cover it.
-                
+
                 // Let's modify:
                 // Loop connects Current -> Next.
                 // We don't rely on "Next Loop connecting Previous -> Current".
-                // 
+                //
                 // So Step A is REMOVED.
                 // Connect Start -> First Group (Before Loop).
                 // Inside Loop:
-                //   Process Group -> Connects to NextNode.
-                
+                // Process Group -> Connects to NextNode.
+
                 lastNode = null; // Unused concept in this approach
             }
         }
-        
 
-        
         // Loop Only Processes Outbound
         // ... (Proceed to implementation)
-        
+
         // Auto Layout
         new BpmnAutoLayout(model).execute();
 
@@ -238,22 +238,23 @@ public class BpmnGeneratorService {
     // Helper to Group Stages
     private List<List<StageConfig>> groupStages(List<StageConfig> stages) {
         List<List<StageConfig>> groups = new ArrayList<>();
-        if (stages.isEmpty()) return groups;
-        
+        if (stages.isEmpty())
+            return groups;
+
         List<StageConfig> currentGroup = new ArrayList<>();
         currentGroup.add(stages.get(0));
         groups.add(currentGroup);
-        
+
         for (int i = 1; i < stages.size(); i++) {
             StageConfig current = stages.get(i);
-            StageConfig prev = stages.get(i-1);
-            
-            boolean sameGroup = current.getParallelGrouping() != null 
-                             && !current.getParallelGrouping().isBlank()
-                             && current.getParallelGrouping().equals(prev.getParallelGrouping());
-            
+            StageConfig prev = stages.get(i - 1);
+
+            boolean sameGroup = current.getParallelGrouping() != null
+                    && !current.getParallelGrouping().isBlank()
+                    && current.getParallelGrouping().equals(prev.getParallelGrouping());
+
             // Also check adjacency order? Already sorted.
-            
+
             if (sameGroup) {
                 currentGroup.add(current);
             } else {
@@ -264,51 +265,52 @@ public class BpmnGeneratorService {
         }
         return groups;
     }
-    
+
     // Extracted Logic for Stage Outbound
-    private void handleStageOutbound(Process process, StageConfig currentStage, FlowElement source, FlowElement defaultTarget, Map<String, FlowElement> stageElements, ObjectMapper objectMapper) {
+    private void handleStageOutbound(Process process, StageConfig currentStage, FlowElement source,
+            FlowElement defaultTarget, Map<String, FlowElement> stageElements, ObjectMapper objectMapper) {
         // ... (Existing Logic refined)
         // Y.5 Exception Rules
         if (currentStage.getExceptionRules() != null && !currentStage.getExceptionRules().isBlank()) {
-             // ...
+            // ...
         }
-        
+
         // A. Routing Rules or Actions
         if ((currentStage.getRoutingRules() != null && !currentStage.getRoutingRules().isBlank())
-             || (currentStage.getActions() != null && !currentStage.getActions().isEmpty())) {
-             
-             ExclusiveGateway gateway = new ExclusiveGateway();
-             gateway.setId("gateway_split_" + currentStage.getStageCode() + "_" + System.nanoTime());
-             process.addFlowElement(gateway);
-             connect(process, source, gateway);
-             
-             // Process Rules/Actions (Connect Gateway -> Targets)
-             boolean defaultFlowSet = false;
-             
-             // ... (Logic from previous) ...
-             
-             // Default Flow
-             if (defaultTarget != null) {
-                 SequenceFlow defFlow = connect(process, gateway, defaultTarget);
-                 gateway.setDefaultFlow(defFlow.getId());
-             } else {
-                 // End
-                 EndEvent end = new EndEvent();
-                 end.setId("end_" + currentStage.getStageCode());
-                 process.addFlowElement(end);
-                 SequenceFlow defFlow = connect(process, gateway, end);
-                 gateway.setDefaultFlow(defFlow.getId());
-             }
+                || (currentStage.getActions() != null && !currentStage.getActions().isEmpty())) {
+
+            ExclusiveGateway gateway = new ExclusiveGateway();
+            gateway.setId("gateway_split_" + currentStage.getStageCode() + "_" + System.nanoTime());
+            process.addFlowElement(gateway);
+            connect(process, source, gateway);
+
+            // Process Rules/Actions (Connect Gateway -> Targets)
+            boolean defaultFlowSet = false;
+
+            // ... (Logic from previous) ...
+
+            // Default Flow
+            if (defaultTarget != null) {
+                SequenceFlow defFlow = connect(process, gateway, defaultTarget);
+                gateway.setDefaultFlow(defFlow.getId());
+            } else {
+                // End
+                EndEvent end = new EndEvent();
+                end.setId("end_" + currentStage.getStageCode());
+                process.addFlowElement(end);
+                SequenceFlow defFlow = connect(process, gateway, end);
+                gateway.setDefaultFlow(defFlow.getId());
+            }
         } else {
-             // Standard Sequential Flow
-             if (defaultTarget != null) {
-                 connect(process, source, defaultTarget);
-             } else {
-                 EndEvent end = new EndEvent();
-                 end.setId("end_" + currentStage.getStageCode());
-                 process.addFlowElement(end);
-                 connect(process, source, end);
-             }
+            // Standard Sequential Flow
+            if (defaultTarget != null) {
+                connect(process, source, defaultTarget);
+            } else {
+                EndEvent end = new EndEvent();
+                end.setId("end_" + currentStage.getStageCode());
+                process.addFlowElement(end);
+                connect(process, source, end);
+            }
         }
     }
 
@@ -317,7 +319,7 @@ public class BpmnGeneratorService {
         if (stage.isNestedWorkflow()) {
             CallActivity callActivity = new CallActivity();
             callActivity.setCalledElement(stage.getNestedWorkflowCode());
-            callActivity.setInheritVariables(true); 
+            callActivity.setInheritVariables(true);
             stageElement = callActivity;
         } else if (stage.isRuleStage()) {
             ServiceTask ruleTask = new ServiceTask();
@@ -331,15 +333,18 @@ public class BpmnGeneratorService {
             UserTask userTask = new UserTask();
             String formKey = getFormKeyForStage(stage.getStageCode());
             userTask.setFormKey(formKey);
-            
+
             if (stage.getAssignmentRules() != null && !stage.getAssignmentRules().isBlank()) {
                 try {
-                    Map<String, Object> rules = objectMapper.readValue(stage.getAssignmentRules(), new TypeReference<Map<String, Object>>() {});
+                    Map<String, Object> rules = objectMapper.readValue(stage.getAssignmentRules(),
+                            new TypeReference<Map<String, Object>>() {
+                            });
                     String mechanism = (String) rules.get("mechanism");
-                    
+
                     if ("GROUP_QUEUE".equals(mechanism)) {
                         String group = (String) rules.get("groupName");
-                        if (group != null) userTask.setCandidateGroups(List.of(group));
+                        if (group != null)
+                            userTask.setCandidateGroups(List.of(group));
                     } else if ("ROUND_ROBIN".equals(mechanism)) {
                         String pool = (String) rules.getOrDefault("roundRobinPool", rules.get("groupName"));
                         FlowableListener listener = new FlowableListener();
@@ -361,6 +366,12 @@ public class BpmnGeneratorService {
                         roleField.setStringValue((String) rules.get("matrixRole"));
                         listener.setFieldExtensions(List.of(roleField));
                         userTask.setTaskListeners(new java.util.ArrayList<>(List.of(listener)));
+                    } else if ("MANUAL".equals(mechanism)) {
+                        // US-1: Manual Assignment
+                        // The functionality relies on a process variable being set by the previous task
+                        // We use a standardized variable name: "manualAssignee"
+                        // This variable is expected to contain the UserId of the assignee.
+                        userTask.setAssignee("${manualAssignee}");
                     }
                 } catch (Exception e) {
                     log.error("Failed to parse assignment rules for stage " + stage.getStageCode(), e);
@@ -378,11 +389,13 @@ public class BpmnGeneratorService {
 
     private void applyHooks(FlowElement stageElement, StageConfig stage) {
         if (stage.getPreEntryHook() != null && !stage.getPreEntryHook().isBlank()) {
-            if (stageElement.getExecutionListeners() == null) stageElement.setExecutionListeners(new ArrayList<>());
+            if (stageElement.getExecutionListeners() == null)
+                stageElement.setExecutionListeners(new ArrayList<>());
             stageElement.getExecutionListeners().add(createListener(stage.getPreEntryHook(), "start"));
         }
         if (stage.getPostExitHook() != null && !stage.getPostExitHook().isBlank()) {
-            if (stageElement.getExecutionListeners() == null) stageElement.setExecutionListeners(new ArrayList<>());
+            if (stageElement.getExecutionListeners() == null)
+                stageElement.setExecutionListeners(new ArrayList<>());
             stageElement.getExecutionListeners().add(createListener(stage.getPostExitHook(), "end"));
         }
 
@@ -398,7 +411,8 @@ public class BpmnGeneratorService {
     }
 
     // handleEntryCondition Helper
-    private void handleEntryCondition(Process process, FlowElement source, FlowElement target, StageConfig targetConfig, FlowElement nextAfterTarget) {
+    private void handleEntryCondition(Process process, FlowElement source, FlowElement target, StageConfig targetConfig,
+            FlowElement nextAfterTarget) {
         ExclusiveGateway split = new ExclusiveGateway();
         split.setId("entry_split_" + targetConfig.getStageCode() + "_" + System.nanoTime());
         process.addFlowElement(split);
@@ -429,7 +443,8 @@ public class BpmnGeneratorService {
         return flow;
     }
 
-    private void addSlaIfConfigured(Process process, FlowElement stageElement, StageConfig stage, WorkflowMaster workflow) {
+    private void addSlaIfConfigured(Process process, FlowElement stageElement, StageConfig stage,
+            WorkflowMaster workflow) {
         BigDecimal slaDays = stage.getSlaDurationDays();
         if (slaDays == null || slaDays.compareTo(BigDecimal.ZERO) <= 0) {
             if (workflow.getSlaDurationDays() != null && workflow.getSlaDurationDays().compareTo(BigDecimal.ZERO) > 0) {
@@ -452,7 +467,7 @@ public class BpmnGeneratorService {
         BoundaryEvent timer = new BoundaryEvent();
         timer.setId("timer_" + userTask.getId());
         timer.setAttachedToRef(userTask);
-        timer.setCancelActivity(false); 
+        timer.setCancelActivity(false);
 
         TimerEventDefinition timerDef = new TimerEventDefinition();
         long hours = days.multiply(BigDecimal.valueOf(24)).longValue();
