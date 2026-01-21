@@ -80,14 +80,19 @@ export default function CaseView() {
         }
 
         try {
+            // Fix: Flatten the payload. The backend expects a Map<String, Object> which are the variables.
+            // We should merge 'variables' (from JSON input/Action) into the top level body.
+            // 'outcome' is also a variable.
+            const payload = {
+                ...variables,
+                outcome: outcome,
+                action: 'completed' // Optional, but if backend ignores it, fine.
+            };
+
             const res = await fetch(`/api/runtime/cases/${id}/tasks/${taskId}/complete`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'completed',
-                    outcome: outcome,
-                    variables: variables
-                })
+                body: JSON.stringify(payload)
             });
 
             if (res.ok) {

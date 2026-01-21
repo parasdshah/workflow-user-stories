@@ -250,6 +250,16 @@ public class CaseService {
                 taskService.setVariableLocal(taskId, "outcome", outcome);
             }
 
+            // Ensure manualAssignee is saved as PROCESS variable
+            if (variables != null && variables.containsKey("manualAssignee")) {
+                String manualAssignee = (String) variables.get("manualAssignee");
+                // Use RuntimeService to explicitly set on the Process Instance
+                // This guarantees visibility to all subsequent tasks in the same instance
+                runtimeService.setVariable(task.getProcessInstanceId(), "manualAssignee", manualAssignee);
+                log.info("Set process variable manualAssignee to {} for process {}", manualAssignee,
+                        task.getProcessInstanceId());
+            }
+
             taskService.complete(taskId, variables);
             log.info("Task {} completed by {}", taskId, userId);
         } finally {
@@ -572,9 +582,25 @@ public class CaseService {
                                             m.put("postStatus", a.getPostActionStatus());
 
                                             // Lookahead for Manual Assignment
-                                            if ("SPECIFIC".equals(a.getTargetType()) && a.getTargetStage() != null) {
+                                            String targetStageCode = null;
+
+                                            if ("SPECIFIC".equals(a.getTargetType())) {
+                                                targetStageCode = a.getTargetStage();
+                                            } else if ("NEXT".equals(a.getTargetType())) {
+                                                // Resolve NEXT stage
+                                                List<com.workflow.service.entity.StageConfig> allStages = stageConfigRepository
+                                                        .findByWorkflowCodeOrderBySequenceOrderAsc(pd.getKey());
+                                                for (int i = 0; i < allStages.size() - 1; i++) {
+                                                    if (allStages.get(i).getStageCode().equals(code)) {
+                                                        targetStageCode = allStages.get(i + 1).getStageCode();
+                                                        break;
+                                                    }
+                                                }
+                                            }
+
+                                            if (targetStageCode != null) {
                                                 stageConfigRepository
-                                                        .findByWorkflowCodeAndStageCode(pd.getKey(), a.getTargetStage())
+                                                        .findByWorkflowCodeAndStageCode(pd.getKey(), targetStageCode)
                                                         .ifPresent(targetConfig -> {
                                                             if (targetConfig.getAssignmentRules() != null) {
                                                                 try {

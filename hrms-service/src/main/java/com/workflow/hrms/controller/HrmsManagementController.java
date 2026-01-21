@@ -71,13 +71,24 @@ public class HrmsManagementController {
 
     @PostMapping("/assignments")
     public ResponseEntity<EmployeeMatrixAssignment> createAssignment(@RequestBody EmployeeMatrixAssignment assignment) {
-        // Hydrate references if needed, or rely on JPA to handle IDs if passed correctly
+        // Hydrate references if needed, or rely on JPA to handle IDs if passed
+        // correctly
         return ResponseEntity.ok(matrixRepo.save(assignment));
     }
-    
+
     // --- EMPLOYEES (Lookup for Assignment) ---
     @GetMapping("/employees")
     public ResponseEntity<List<EmployeeMaster>> getAllEmployees() {
         return ResponseEntity.ok(employeeRepo.findAll());
+    }
+
+    @GetMapping("/employees/by-role/{roleCode}")
+    public ResponseEntity<List<EmployeeMaster>> getEmployeesByRole(@PathVariable String roleCode) {
+        List<EmployeeMatrixAssignment> assignments = matrixRepo.findByRoleRoleCode(roleCode);
+        List<EmployeeMaster> employees = assignments.stream()
+                .map(EmployeeMatrixAssignment::getEmployee)
+                .distinct()
+                .collect(java.util.stream.Collectors.toList());
+        return ResponseEntity.ok(employees);
     }
 }

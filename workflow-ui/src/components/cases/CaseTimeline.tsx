@@ -162,23 +162,22 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
 
         if (requiresManual) {
             setManualLoading(true);
-            // Fetch users for the group
-            // Ideally use an API that filters by Role/Group
-            // Since we don't have a direct "Get Users By Role" exposed in UI easily, 
-            // we might fallback to fetching all (or assume /api/hrms/users?role=X works)
-            // Let's assume the standard /api/hrms/users handles basic listing or we use specific endpoint
-            fetch(`/api/hrms/employees`)
-                .then(res => res.json())
+
+            // Fixed: Use correct endpoint for Role-based lookup
+            // If groupName (role) is present, use specific endpoint, else fetch all
+            const url = groupName ? `/api/hrms/employees/by-role/${groupName}` : `/api/hrms/employees`;
+
+            fetch(url)
+                .then(res => {
+                    if (!res.ok) throw new Error("API Request Failed");
+                    return res.json();
+                })
                 .then(data => {
                     if (Array.isArray(data)) {
-                        // Client-side filtering if 'role' or 'department' matches groupName
-                        // If groupName is provided, we try to filter. 
-                        // Note: Employee structure might differ, assumign 'role' or 'department' field exists.
-                        const filtered = groupName
-                            ? data.filter((u: any) => u.roleCode === groupName || u.department === groupName || !groupName)
-                            : data;
-
-                        setManualUsers(filtered.map((u: any) => ({ value: u.userId || u.employeeId, label: u.fullName || u.employeeName || u.userId })));
+                        setManualUsers(data.map((u: any) => ({
+                            value: u.userId || u.employeeId,
+                            label: u.fullName || u.employeeName || u.userId || u.employeeId
+                        })));
                     } else {
                         setManualUsers([]);
                     }
