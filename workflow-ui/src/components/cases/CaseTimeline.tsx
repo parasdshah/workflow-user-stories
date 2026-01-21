@@ -1,4 +1,4 @@
-import { Timeline, Text, Badge, Card, Button, Group, Collapse, Loader, Modal, JsonInput, Select } from '@mantine/core';
+import { Timeline, Text, Badge, Card, Button, Group, Collapse, Loader, Modal, JsonInput, Table, ScrollArea } from '@mantine/core';
 import { IconCheck, IconCircleDashed, IconPlayerPlay, IconX, IconChevronDown, IconChevronRight } from '@tabler/icons-react';
 import { useState, useEffect } from 'react';
 
@@ -128,12 +128,15 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
 
     const [modalOpen, setModalOpen] = useState(false);
     const [jsonInput, setJsonInput] = useState('{}');
-    const [pendingAction, setPendingAction] = useState<{ taskId: string, outcome?: string, manualReq?: boolean } | null>(null);
+    const [pendingAction, setPendingAction] = useState<{ taskId: string, outcome?: string, manualReq?: boolean, groupName?: string } | null>(null);
 
     // Manual Assignment State
     const [manualAssignee, setManualAssignee] = useState<string | null>(null);
+    const [manualAssigneeName, setManualAssigneeName] = useState<string | null>(null); // To show selected name
     const [manualUsers, setManualUsers] = useState<any[]>([]);
     const [manualLoading, setManualLoading] = useState(false);
+
+    const [userGridOpen, setUserGridOpen] = useState(false);
 
     const initiateAction = (taskId: string, outcome?: string, allowedActionsJson?: string) => {
         // Check for Manual Assignment Requirement
@@ -156,9 +159,10 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
             }
         }
 
-        setPendingAction({ taskId, outcome, manualReq: requiresManual });
+        setPendingAction({ taskId, outcome, manualReq: requiresManual, groupName: groupName });
         setJsonInput('{\n  \n}');
         setManualAssignee(null);
+        setManualAssigneeName(null);
 
         if (requiresManual) {
             setManualLoading(true);
@@ -175,8 +179,10 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
                 .then(data => {
                     if (Array.isArray(data)) {
                         setManualUsers(data.map((u: any) => ({
-                            value: u.userId || u.employeeId,
-                            label: u.fullName || u.employeeName || u.userId || u.employeeId
+                            id: u.userId || u.employeeId,
+                            name: u.fullName || u.employeeName || u.userId || u.employeeId,
+                            email: u.email || 'N/A',
+                            role: u.roleCode || 'N/A'
                         })));
                     } else {
                         setManualUsers([]);
@@ -214,6 +220,12 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
         }
         setModalOpen(false);
         setPendingAction(null);
+    };
+
+    const selectUser = (user: any) => {
+        setManualAssignee(user.id);
+        setManualAssigneeName(user.name);
+        setUserGridOpen(false);
     };
 
     // userMap logic removed as backend provides assigneeName
@@ -378,17 +390,23 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
             <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title="Confirm Action">
                 {pendingAction?.manualReq && (
                     <Card withBorder mb="md" p="xs" bg="blue.0">
-                        <Text size="sm" fw={500} mb="xs">Select Next Assignee</Text>
+                        <Text size="sm" fw={700} mb="xs">
+                            Candidate Group: <span style={{ fontWeight: 400 }}>{pendingAction.groupName || 'Any'}</span>
+                        </Text>
+
                         {manualLoading ? <Loader size="sm" /> : (
-                            <Select
-                                data={manualUsers}
-                                placeholder="Search User..."
-                                searchable
-                                value={manualAssignee}
-                                onChange={setManualAssignee}
-                                description="This action requires you to manually select who handles the next stage."
-                            />
+                            <Group>
+                                <Button onClick={() => setUserGridOpen(true)} variant="light">
+                                    {manualAssigneeName ? 'Change User' : 'Select User from List'}
+                                </Button>
+                                {manualAssigneeName && (
+                                    <Text size="sm" fw={500} c="blue">
+                                        Selected: {manualAssigneeName}
+                                    </Text>
+                                )}
+                            </Group>
                         )}
+                        <Text size="xs" c="dimmed" mt="xs">Please verify the filtered list before selection.</Text>
                     </Card>
                 )}
 
@@ -407,6 +425,43 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
                     <Button variant="default" onClick={() => setModalOpen(false)}>Cancel</Button>
                     <Button onClick={confirmAction}>Confirm</Button>
                 </Group>
+            </Modal>
+
+            <Modal opened={userGridOpen} onClose={() => setUserGridOpen(false)} title="Select Assignee" size="lg">
+                <Text size="sm" mb="md" fw={500}>
+                    Filtering by Group: <Badge>{pendingAction?.groupName || 'All Users'}</Badge>
+                </Text>
+                <ScrollArea h={300}>
+                    <Table stickyHeader>
+                        <Table.Thead>
+                            <Table.Tr>
+                                <Table.Th>Name</Table.Th>
+                                <Table.Th>Email</Table.Th>
+                                <Table.Th>ID</Table.Th>
+                                <Table.Th>Action</Table.Th>
+                            </Table.Tr>
+                        </Table.Thead>
+                        <Table.Tbody>
+                            {manualUsers.map((user) => (
+                                <Table.Tr key={user.id}>
+                                    <Table.Td>{user.name}</Table.Td>
+                                    <Table.Td>{user.email}</Table.Td>
+                                    <Table.Td>{user.id}</Table.Td>
+                                    <Table.Td>
+                                        <Button size="xs" onClick={() => selectUser(user)}>Select</Button>
+                                    </Table.Td>
+                                </Table.Tr>
+                            ))}
+                            {manualUsers.length === 0 && (
+                                <Table.Tr>
+                                    <Table.Td colSpan={4}>
+                                        <Text ta="center" c="dimmed">No users found in this group.</Text>
+                                    </Table.Td>
+                                </Table.Tr>
+                            )}
+                        </Table.Tbody>
+                    </Table>
+                </ScrollArea>
             </Modal>
         </Card >
     );

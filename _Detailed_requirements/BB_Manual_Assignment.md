@@ -61,3 +61,22 @@ sequenceDiagram
     Backend->>Backend: Calculate Next Stage (Manual)
     Backend->>Backend: Create Next Task (Assignee = "john.doe")
 ```
+
+## 5. Resolved Implementation Issues (Log)
+During the implementation of this feature, the following critical issues were encountered and resolved:
+
+### Issue 1: Lookup Failure for "Next" Stage
+- **Problem**: The system failed to prompt for a user when the action target was set to "Next Step" (dynamic resolution) because the logic only checked for explicitly linked "Specific Stages".
+- **Resolution**: Updated `CaseService` to implement lookahead logic. If the target type is `NEXT`, the system now identifies the next sequential stage in the workflow and checks its configuration for manual assignment requirements.
+
+### Issue 2: Empty User Dropdown (Client-Side Filtering)
+- **Problem**: The frontend attempted to filter users by Role/Group on the client side, but the standard employee API did not return role information, resulting in an empty list.
+- **Resolution**: Implemented a new backend endpoint `GET /api/hrms/employees/by-role/{roleCode}` in `HrmsManagementController`. The frontend now calls this endpoint to fetch the correct pre-filtered list of candidates.
+
+### Issue 3: Variable Persistence & Data Loss
+- **Problem**: The `manualAssignee` variable was being treated as a task-local variable or was lost during transmission.
+    1. **Frontend**: Sent variables nested inside a `variables` object, hiding them from the backend.
+    2. **Backend**: Saved variables to the *Task Scope* (which expires on completion) rather than *Process Scope*.
+- **Resolution**:
+    1. **Frontend**: Updated `CaseView.tsx` to flatten the JSON payload (sending `manualAssignee` at the top level).
+    2. **Backend**: Updated `CaseService.completeTask` to explicitly save `manualAssignee` using `runtimeService.setVariable(processInstanceId, ...)` to guarantee it persists for the next stage's creation.
