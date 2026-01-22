@@ -1,4 +1,4 @@
-import { Container, Title, Button, TextInput, Group, Stack, Paper, Select, NumberInput, Modal, Table, ActionIcon, SimpleGrid, Tabs, SegmentedControl, Text, Code, Badge } from '@mantine/core';
+import { Container, Title, Button, TextInput, Group, Stack, Paper, Select, NumberInput, Modal, Table, ActionIcon, SimpleGrid, Tabs, SegmentedControl, Text, Code, Badge, Switch } from '@mantine/core';
 import { IconEdit, IconTrash, IconGitBranch, IconUser, IconSettings, IconGavel, IconArrowsSplit, IconSitemap, IconInfoCircle, IconBolt, IconPlug, IconWorld, IconUsers } from '@tabler/icons-react';
 import { useForm } from '@mantine/form';
 import { useDisclosure } from '@mantine/hooks';
@@ -47,6 +47,10 @@ interface StageConfig {
     exceptionRules?: string; // JSON String
     exceptionRulesList?: any[]; // UI only
     assignmentRules?: string; // JSON String
+    // Multi-Instance
+    isMultiInstance?: boolean;
+    miCollectionVariable?: string;
+    miElementVariable?: string;
 }
 
 
@@ -114,7 +118,10 @@ function WorkflowEditor() {
             entryCondition: '',
             routingRulesList: [] as { condition: string, targetStageCode: string }[],
             exceptionRulesList: [] as { errorCode: string, targetStageCode: string }[],
-            assignmentRules: ''
+            assignmentRules: '',
+            isMultiInstance: false,
+            miCollectionVariable: '',
+            miElementVariable: ''
         }
     });
 
@@ -174,7 +181,10 @@ function WorkflowEditor() {
             entryCondition: stage.entryCondition || '',
             routingRulesList: safeParse(stage.routingRules),
             exceptionRulesList: safeParse((stage as any).exceptionRules),
-            assignmentRules: (stage as any).assignmentRules || ''
+            assignmentRules: (stage as any).assignmentRules || '',
+            isMultiInstance: (stage as any).isMultiInstance || false,
+            miCollectionVariable: (stage as any).miCollectionVariable || '',
+            miElementVariable: (stage as any).miElementVariable || ''
         });
         open();
     };
@@ -558,6 +568,36 @@ function WorkflowEditor() {
                                         {...stageForm.getInputProps('parallelGrouping')}
                                     />
                                 </Paper>
+
+                                {(stageForm.values.isNestedWorkflow || stageForm.values.isServiceTask) && (
+                                    <Paper withBorder p="xs" mt="sm" bg="teal.0">
+                                        <Title order={6} mb="xs">Multi-Instance (Parallel Loop)</Title>
+                                        <Stack gap="xs">
+                                            <Switch
+                                                label="Enable Multi-Instance Execution"
+                                                {...stageForm.getInputProps('isMultiInstance', { type: 'checkbox' })}
+                                            />
+                                            {stageForm.values.isMultiInstance && (
+                                                <SimpleGrid cols={2}>
+                                                    <TextInput
+                                                        label="Collection Variable"
+                                                        placeholder="e.g. subBatchList"
+                                                        description="Process variable containing the list"
+                                                        required
+                                                        {...stageForm.getInputProps('miCollectionVariable')}
+                                                    />
+                                                    <TextInput
+                                                        label="Element Variable"
+                                                        placeholder="e.g. docItem"
+                                                        description="Variable name for single item in loop"
+                                                        required
+                                                        {...stageForm.getInputProps('miElementVariable')}
+                                                    />
+                                                </SimpleGrid>
+                                            )}
+                                        </Stack>
+                                    </Paper>
+                                )}
                             </Stack>
                         </Tabs.Panel>
 

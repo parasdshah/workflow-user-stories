@@ -60,6 +60,17 @@ public class StageConfig {
 
     private String ruleKey;
 
+    // Multi-Instance Support
+    @com.fasterxml.jackson.annotation.JsonProperty("isMultiInstance")
+    private Boolean isMultiInstance = false;
+
+    private String miCollectionVariable; // The process variable list
+    private String miElementVariable;    // The variable for each element
+
+    public boolean isMultiInstance() {
+        return Boolean.TRUE.equals(this.isMultiInstance);
+    }
+
     // Z. Advanced Routing
     @Column(columnDefinition = "TEXT")
     private String entryCondition; // Expression to evaluate before entering stage

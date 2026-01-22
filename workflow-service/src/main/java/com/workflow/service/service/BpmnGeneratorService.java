@@ -380,6 +380,20 @@ public class BpmnGeneratorService {
             stageElement = userTask;
         }
 
+        if (stage.isMultiInstance()) {
+            MultiInstanceLoopCharacteristics loop = new MultiInstanceLoopCharacteristics();
+            loop.setSequential(false); // Default to Parallel
+            if (stage.getMiCollectionVariable() != null) {
+                loop.setInputDataItem(stage.getMiCollectionVariable());
+            }
+            if (stage.getMiElementVariable() != null) {
+                loop.setElementVariable(stage.getMiElementVariable());
+            }
+            if (stageElement instanceof Activity) {
+                ((Activity) stageElement).setLoopCharacteristics(loop);
+            }
+        }
+
         stageElement.setId(stage.getStageCode());
         stageElement.setName(stage.getStageName());
 
