@@ -21,6 +21,7 @@ interface StageAction {
 }
 
 interface StageConfig {
+    id?: number;
     stageName: string;
     stageCode: string;
     sequenceOrder: number;
@@ -284,9 +285,14 @@ function WorkflowEditor() {
 
             // 3. Delete Removed Stages
             for (const del of deletedStages) {
-                console.log("Deleting Stage:", del.stageCode);
+                console.log("Deleting Stage:", del.stageCode, "ID:", del.id);
                 try {
-                    await fetch(`/api/workflows/${wfCode}/stages/${del.stageCode}`, { method: 'DELETE' });
+                    if (del.id) {
+                        await fetch(`/api/workflows/${wfCode}/stages/by-id/${del.id}`, { method: 'DELETE' });
+                    } else {
+                        // Fallback if no ID (should rely on ID usually)
+                        await fetch(`/api/workflows/${wfCode}/stages/${del.stageCode}`, { method: 'DELETE' });
+                    }
                 } catch (e) {
                     console.error("Failed to delete stage", del.stageCode, e);
                 }

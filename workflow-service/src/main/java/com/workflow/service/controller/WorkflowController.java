@@ -130,6 +130,23 @@ public class WorkflowController {
         }
     }
 
+    @Operation(summary = "Delete stage by ID", description = "Deletes a stage from a workflow using its ID")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Stage deleted successfully"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    @DeleteMapping("/{code}/stages/by-id/{stageId}")
+    public ResponseEntity<?> deleteStageById(
+            @Parameter(description = "Workflow code") @PathVariable String code,
+            @Parameter(description = "Stage ID") @PathVariable Long stageId) {
+        try {
+            workflowService.deleteStageById(stageId);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Error deleting stage: " + e.getMessage());
+        }
+    }
+
     // Screen Mapping Endpoints
     @Operation(summary = "Add screen mapping", description = "Maps a screen definition to a workflow stage")
     @ApiResponses(value = {

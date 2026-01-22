@@ -131,6 +131,15 @@ public class WorkflowDefinitionService {
         stageRepository.delete(stage);
     }
 
+    @Transactional
+    public void deleteStageById(Long stageId) {
+        StageConfig stage = stageRepository.findById(stageId)
+                .orElseThrow(() -> new IllegalArgumentException("Stage not found"));
+        // Cleanup associated data
+        screenMappingRepository.deleteByStageCode(stage.getStageCode());
+        stageRepository.delete(stage);
+    }
+
     // Screen Mapping CRUD
 
     @Transactional
