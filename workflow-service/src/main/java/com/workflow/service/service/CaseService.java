@@ -581,47 +581,8 @@ public class CaseService {
                                             m.put("target", a.getTargetType());
                                             m.put("postStatus", a.getPostActionStatus());
 
-                                            // Lookahead for Manual Assignment
-                                            String targetStageCode = null;
-
-                                            if ("SPECIFIC".equals(a.getTargetType())) {
-                                                targetStageCode = a.getTargetStage();
-                                            } else if ("NEXT".equals(a.getTargetType())) {
-                                                // Resolve NEXT stage
-                                                List<com.workflow.service.entity.StageConfig> allStages = stageConfigRepository
-                                                        .findByWorkflowCodeOrderBySequenceOrderAsc(pd.getKey());
-                                                for (int i = 0; i < allStages.size() - 1; i++) {
-                                                    if (allStages.get(i).getStageCode().equals(code)) {
-                                                        targetStageCode = allStages.get(i + 1).getStageCode();
-                                                        break;
-                                                    }
-                                                }
-                                            }
-
-                                            if (targetStageCode != null) {
-                                                stageConfigRepository
-                                                        .findByWorkflowCodeAndStageCode(pd.getKey(), targetStageCode)
-                                                        .ifPresent(targetConfig -> {
-                                                            if (targetConfig.getAssignmentRules() != null) {
-                                                                try {
-                                                                    java.util.Map<String, Object> rules = new com.fasterxml.jackson.databind.ObjectMapper()
-                                                                            .readValue(
-                                                                                    targetConfig.getAssignmentRules(),
-                                                                                    new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, Object>>() {
-                                                                                    });
-
-                                                                    if ("MANUAL".equals(rules.get("mechanism"))) {
-                                                                        m.put("requiresManualAssignment", true);
-                                                                        m.put("assignmentGroup",
-                                                                                rules.get("groupName"));
-                                                                    }
-                                                                } catch (Exception ex) {
-                                                                    // ignore parse error
-                                                                }
-                                                            }
-                                                        });
-                                            }
-
+                                            enrichWithManualAssignmentInfo(m, a.getTargetType(), a.getTargetStage(),
+                                                    code, pd.getKey());
                                             actionMaps.add(m);
                                         }
 
@@ -629,6 +590,25 @@ public class CaseService {
                                                 .writeValueAsString(actionMaps));
                                     } catch (Exception e) {
                                         log.warn("Failed to serialize actions for stage: {}", code, e);
+                                    }
+                                } else {
+                                    // Default Implicit Action "Complete" -> NEXT
+                                    try {
+                                        java.util.List<java.util.Map<String, Object>> actionMaps = new java.util.ArrayList<>();
+                                        java.util.Map<String, Object> m = new java.util.HashMap<>();
+                                        m.put("label", "Complete");
+                                        m.put("value", "Complete"); // Or keep empty? UI sends label as value if value
+                                                                    // missing.
+                                        m.put("style", "default");
+                                        m.put("target", "NEXT");
+
+                                        enrichWithManualAssignmentInfo(m, "NEXT", null, code, pd.getKey());
+                                        actionMaps.add(m);
+
+                                        dto.setAllowedActions(new com.fasterxml.jackson.databind.ObjectMapper()
+                                                .writeValueAsString(actionMaps));
+                                    } catch (Exception e) {
+                                        log.warn("Failed to generate default action for stage: {}", code, e);
                                     }
                                 }
                             });
@@ -639,6 +619,48 @@ public class CaseService {
         }
 
         return dto;
+    }
+
+    private void enrichWithManualAssignmentInfo(java.util.Map<String, Object> m, String targetType, String targetStage,
+            String currentStageCode, String workflowCode) {
+        String targetStageCode = null;
+
+        if ("SPECIFIC".equals(targetType)) {
+            targetStageCode = targetStage;
+        } else if ("NEXT".equals(targetType)) {
+            // Resolve NEXT stage
+            List<com.workflow.service.entity.StageConfig> allStages = stageConfigRepository
+                    .findByWorkflowCodeOrderBySequenceOrderAsc(workflowCode);
+            for (int i = 0; i < allStages.size() - 1; i++) {
+                if (allStages.get(i).getStageCode().equals(currentStageCode)) {
+                    targetStageCode = allStages.get(i + 1).getStageCode();
+                    break;
+                }
+            }
+        }
+
+        if (targetStageCode != null) {
+            stageConfigRepository
+                    .findByWorkflowCodeAndStageCode(workflowCode, targetStageCode)
+                    .ifPresent(targetConfig -> {
+                        if (targetConfig.getAssignmentRules() != null) {
+                            try {
+                                java.util.Map<String, Object> rules = new com.fasterxml.jackson.databind.ObjectMapper()
+                                        .readValue(
+                                                targetConfig.getAssignmentRules(),
+                                                new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, Object>>() {
+                                                });
+
+                                if ("MANUAL".equals(rules.get("mechanism"))) {
+                                    m.put("requiresManualAssignment", true);
+                                    m.put("assignmentGroup", rules.get("groupName"));
+                                }
+                            } catch (Exception ex) {
+                                // ignore parse error
+                            }
+                        }
+                    });
+        }
     }
 
     private void resolveAssigneeNames(List<StageDTO> stages) {
