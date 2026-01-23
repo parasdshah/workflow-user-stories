@@ -384,7 +384,11 @@ public class BpmnGeneratorService {
             MultiInstanceLoopCharacteristics loop = new MultiInstanceLoopCharacteristics();
             loop.setSequential(false); // Default to Parallel
             if (stage.getMiCollectionVariable() != null) {
-                loop.setInputDataItem(stage.getMiCollectionVariable());
+                String collectionVar = stage.getMiCollectionVariable();
+                if (!collectionVar.startsWith("${")) {
+                    collectionVar = "${" + collectionVar + "}";
+                }
+                loop.setInputDataItem(collectionVar);
             }
             if (stage.getMiElementVariable() != null) {
                 loop.setElementVariable(stage.getMiElementVariable());

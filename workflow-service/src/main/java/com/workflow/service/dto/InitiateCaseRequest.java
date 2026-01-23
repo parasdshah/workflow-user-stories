@@ -29,7 +29,21 @@ public class InitiateCaseRequest {
         return userId;
     }
 
-    public void setUserId(String userId) {
-        this.userId = userId;
+    private Map<String, Object> otherFields = new java.util.HashMap<>();
+
+    @com.fasterxml.jackson.annotation.JsonAnySetter
+    public void add(String key, Object value) {
+        otherFields.put(key, value);
+    }
+
+    public Map<String, Object> getEffectiveVariables() {
+        Map<String, Object> effective = new java.util.HashMap<>();
+        if (otherFields != null) {
+            effective.putAll(otherFields);
+        }
+        if (variables != null) {
+            effective.putAll(variables);
+        }
+        return effective;
     }
 }

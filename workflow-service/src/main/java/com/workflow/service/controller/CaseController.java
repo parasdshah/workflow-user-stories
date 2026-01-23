@@ -46,7 +46,16 @@ public class CaseController {
             @Parameter(description = "Case initiation request with workflow code and variables") @RequestBody InitiateCaseRequest request) {
         String workflowCode = request.getWorkflowCode();
         String userId = request.getUserId() != null ? request.getUserId() : "anonymous";
-        Map<String, Object> variables = request.getVariables();
+        Map<String, Object> variables = request.getEffectiveVariables();
+        org.slf4j.LoggerFactory.getLogger(CaseController.class).info(
+                "Initiating Case: {}, UserId: {}, Variables Keys: {}",
+                workflowCode, userId, variables != null ? variables.keySet() : "null");
+        if (variables != null && variables.containsKey("documentList")) {
+            org.slf4j.LoggerFactory.getLogger(CaseController.class).info("documentList found in variables. Size: {}",
+                    ((java.util.List) variables.get("documentList")).size());
+        } else {
+            org.slf4j.LoggerFactory.getLogger(CaseController.class).warn("documentList MISSING in variables map!");
+        }
 
         try {
             String caseId = caseService.initiateCase(workflowCode, variables, userId);
