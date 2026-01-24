@@ -287,9 +287,46 @@ public class BpmnGeneratorService {
             // Process Rules/Actions (Connect Gateway -> Targets)
             boolean defaultFlowSet = false;
 
-            // ... (Logic from previous) ...
+            // 1. Handle Configured Actions
+            if (currentStage.getActions() != null) {
+                for (com.workflow.service.entity.StageAction action : currentStage.getActions()) {
+                    String targetType = action.getTargetType();
+                    // Determine Target Element
+                    FlowElement targetElement = null;
 
-            // Default Flow
+                    if ("SPECIFIC".equals(targetType)) {
+                        String targetCode = action.getTargetStage();
+                        if (targetCode != null && stageElements.containsKey(targetCode)) {
+                            targetElement = stageElements.get(targetCode);
+                        } else {
+                            log.warn("Target stage {} not found for action {} in stage {}", targetCode,
+                                    action.getActionLabel(), currentStage.getStageCode());
+                        }
+                    } else if ("END".equals(targetType)) {
+                        EndEvent actionEnd = new EndEvent();
+                        actionEnd.setId("end_action_" + currentStage.getStageCode() + "_" + action.getActionLabel());
+                        process.addFlowElement(actionEnd);
+                        targetElement = actionEnd;
+                    } else if ("NEXT".equals(targetType)) {
+                        // Next is defaultTarget passed to method
+                        targetElement = defaultTarget;
+                    }
+
+                    if (targetElement != null) {
+                        SequenceFlow actionFlow = connect(process, gateway, targetElement);
+                        // Condition: ${outcome == 'LABEL'}
+                        // Note: outcome variable is set in CaseService.completeTask
+                        String condition = "${outcome == '" + action.getActionLabel() + "'}";
+                        actionFlow.setConditionExpression(condition);
+                    }
+                }
+            }
+
+            // 2. Default Flow (If outcome doesn't match specific actions, or if no outcome)
+            // Ideally we should have a fallback.
+            // If defaultTarget exists, use it as default flow?
+            // Or only if no condition met?
+
             if (defaultTarget != null) {
                 SequenceFlow defFlow = connect(process, gateway, defaultTarget);
                 gateway.setDefaultFlow(defFlow.getId());
@@ -454,7 +491,7 @@ public class BpmnGeneratorService {
 
     private SequenceFlow connect(Process process, FlowElement source, FlowElement target) {
         SequenceFlow flow = new SequenceFlow();
-        flow.setId("flow_" + source.getId() + "_" + target.getId()); // ID needed?
+        flow.setId("flow_" + source.getId() + "_" + target.getId() + "_" + System.nanoTime()); // Unique ID
         flow.setSourceRef(source.getId());
         flow.setTargetRef(target.getId());
         process.addFlowElement(flow);

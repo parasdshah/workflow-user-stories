@@ -17,3 +17,7 @@ spring:
 flowable:
   database-schema-update: true
   async-executor-activate: false
+
+workflow:
+  user-adapter:
+    url: http://localhost:8081
