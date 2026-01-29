@@ -1,6 +1,5 @@
 package com.workflow.service.listener;
 
-import com.workflow.service.dto.ResolutionRequest;
 import com.workflow.service.integration.UserAdapterClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,8 +32,8 @@ public class RoundRobinAssignmentListener implements TaskListener {
 
             // 1. Get Users in Pool
             // ResolutionRequest req = new ResolutionRequest();
-            // req.setRole(roleCode); 
-            
+            // req.setRole(roleCode);
+
             // We use getRoleMembers for Round Robin as we want ALL candidates
             List<String> candidates = userAdapterClient.getRoleMembers(roleCode);
 
@@ -52,35 +51,38 @@ public class RoundRobinAssignmentListener implements TaskListener {
 
             // Optimized Query: Fetch only the latest 1 finished task
             List<HistoricTaskInstance> lastTasks = historyService.createHistoricTaskInstanceQuery()
-                .processDefinitionKey(processDefinitionKey)
-                .taskDefinitionKey(delegateTask.getTaskDefinitionKey())
-                .finished()
-                .includeTaskLocalVariables() // Fetch local vars to get savedAssignee
-                .orderByHistoricTaskInstanceEndTime().desc()
-                .listPage(0, 1);
-            
+                    .processDefinitionKey(processDefinitionKey)
+                    .taskDefinitionKey(delegateTask.getTaskDefinitionKey())
+                    .finished()
+                    .includeTaskLocalVariables() // Fetch local vars to get savedAssignee
+                    .orderByHistoricTaskInstanceEndTime().desc()
+                    .listPage(0, 1);
+
             String nextAssignee = candidates.get(0);
             String lastAssignee = null;
 
             if (!lastTasks.isEmpty()) {
                 HistoricTaskInstance lastTask = lastTasks.get(0);
                 lastAssignee = lastTask.getAssignee();
-                
-                // Fallback to savedAssignee if standard assignee is null (handling known persistence issue)
-                if (lastAssignee == null && lastTask.getTaskLocalVariables() != null && lastTask.getTaskLocalVariables().containsKey("savedAssignee")) {
+
+                // Fallback to savedAssignee if standard assignee is null (handling known
+                // persistence issue)
+                if (lastAssignee == null && lastTask.getTaskLocalVariables() != null
+                        && lastTask.getTaskLocalVariables().containsKey("savedAssignee")) {
                     lastAssignee = (String) lastTask.getTaskLocalVariables().get("savedAssignee");
                     log.info("Round Robin: Recovered last assignee {} from variable", lastAssignee);
                 }
-                
+
                 log.info("Round Robin: Found last assignee: {}", lastAssignee);
-                
+
                 if (lastAssignee != null) {
                     int lastIdx = candidates.indexOf(lastAssignee);
                     if (lastIdx != -1) {
                         int nextIdx = (lastIdx + 1) % candidates.size();
                         nextAssignee = candidates.get(nextIdx);
                     } else {
-                         log.warn("Round Robin: Last assignee {} not found in current pool {}. Resetting to first.", lastAssignee, candidates);
+                        log.warn("Round Robin: Last assignee {} not found in current pool {}. Resetting to first.",
+                                lastAssignee, candidates);
                     }
                 }
             } else {

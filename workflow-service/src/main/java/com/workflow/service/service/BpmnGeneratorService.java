@@ -19,7 +19,6 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Collections;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -285,7 +284,6 @@ public class BpmnGeneratorService {
             connect(process, source, gateway);
 
             // Process Rules/Actions (Connect Gateway -> Targets)
-            boolean defaultFlowSet = false;
 
             // 1. Handle Configured Actions
             if (currentStage.getActions() != null) {
