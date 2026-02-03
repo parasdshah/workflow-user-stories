@@ -30,4 +30,5 @@ public class StageDTO {
     private String parentWorkflowName;
     
     private java.util.Map<String, Object> processVariables;
+    private java.util.List<String> candidateGroups; // Added for Group Queue visibility
 }

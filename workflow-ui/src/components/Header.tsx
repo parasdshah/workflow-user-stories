@@ -38,6 +38,9 @@ function Header() {
                                 <Menu.Item leftSection={<IconChartBar size={14} />} onClick={() => navigate('/storyboard')}>
                                     Workload Storyboard
                                 </Menu.Item>
+                                <Menu.Item leftSection={<IconChartBar size={14} />} onClick={() => navigate('/workload/groups')}>
+                                    Group Queues Dashboard
+                                </Menu.Item>
                                 <Menu.Divider />
                                 <Menu.Item leftSection={<IconSettings size={14} />} onClick={() => navigate('/settings/availability')}>
                                     My Availability (OOO)

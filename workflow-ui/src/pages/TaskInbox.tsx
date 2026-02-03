@@ -18,6 +18,7 @@ interface TaskDto {
     stageName: string;
     assignee: string;
     createdTime: string;
+    candidateGroups?: string[];
 }
 
 // Reuse or new interface for History Items
@@ -61,7 +62,8 @@ function TaskInbox() {
     const [filters, setFilters] = useState({
         workflowCode: '',
         initiator: '',
-        cpId: ''
+        cpId: '',
+        candidateGroup: ''
     });
 
     const handleFilterChange = (key: string, value: string) => {
@@ -72,6 +74,7 @@ function TaskInbox() {
         const queryParams = new URLSearchParams();
         if (filters.workflowCode) queryParams.append('workflowCode', filters.workflowCode);
         if (filters.cpId) queryParams.append('cpId', filters.cpId);
+        if (filters.candidateGroup) queryParams.append('candidateGroup', filters.candidateGroup);
 
         if (activeTab === 'active') {
             if (filters.initiator) queryParams.append('initiator', filters.initiator);
@@ -158,12 +161,20 @@ function TaskInbox() {
                         onChange={(e) => handleFilterChange('workflowCode', e.currentTarget.value)}
                     />
                     {activeTab === 'active' && (
-                        <TextInput
-                            placeholder="Initiator"
-                            size="xs"
-                            value={filters.initiator}
-                            onChange={(e) => handleFilterChange('initiator', e.currentTarget.value)}
-                        />
+                        <>
+                            <TextInput
+                                placeholder="Initiator"
+                                size="xs"
+                                value={filters.initiator}
+                                onChange={(e) => handleFilterChange('initiator', e.currentTarget.value)}
+                            />
+                            <TextInput
+                                placeholder="Queue / Group"
+                                size="xs"
+                                value={filters.candidateGroup}
+                                onChange={(e) => handleFilterChange('candidateGroup', e.currentTarget.value)}
+                            />
+                        </>
                     )}
                     <TextInput
                         placeholder="CP ID"
@@ -209,7 +220,15 @@ function TaskInbox() {
                                         {!loadingTasks[c.caseId] && tasks[c.caseId]?.map(t => (
                                             <Group key={t.taskId} mb="xs" p="xs" style={{ border: '1px solid #eee', borderRadius: '4px' }}>
                                                 <Text size="sm" fw={500}>{t.stageName}</Text>
-                                                <Badge variant="outline" size="sm">{t.assignee || 'Unassigned'}</Badge>
+                                                {t.assignee ? (
+                                                    <Badge variant="outline" size="sm">{t.assignee}</Badge>
+                                                ) : (
+                                                    <Badge variant="filled" color="orange" size="sm">
+                                                        {t.candidateGroups && t.candidateGroups.length > 0
+                                                            ? `Queue: ${t.candidateGroups.join(', ')}`
+                                                            : 'Unassigned'}
+                                                    </Badge>
+                                                )}
                                                 <Text size="xs" c="dimmed">Created: {new Date(t.createdTime).toLocaleString()}</Text>
                                             </Group>
                                         ))}

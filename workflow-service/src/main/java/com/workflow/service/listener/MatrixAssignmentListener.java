@@ -13,6 +13,7 @@ import java.util.List;
 import java.math.BigDecimal;
 
 @Component("matrixAssignmentListener")
+@org.springframework.context.annotation.Scope(org.springframework.beans.factory.config.ConfigurableBeanFactory.SCOPE_PROTOTYPE)
 @RequiredArgsConstructor
 @Slf4j
 public class MatrixAssignmentListener implements TaskListener {
@@ -21,6 +22,7 @@ public class MatrixAssignmentListener implements TaskListener {
     private final com.workflow.service.service.CalendarService calendarService;
 
     // Injected via Field Extension
+    @lombok.Setter
     private Expression role;
 
     @Override

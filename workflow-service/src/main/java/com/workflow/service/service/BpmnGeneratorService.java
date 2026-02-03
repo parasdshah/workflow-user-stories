@@ -376,8 +376,9 @@ public class BpmnGeneratorService {
                             });
                     String mechanism = (String) rules.get("mechanism");
 
-                    if ("GROUP_QUEUE".equals(mechanism)) {
+                    if ("GROUP_QUEUE".equals(mechanism) || "GROUP".equals(mechanism)) {
                         String group = (String) rules.get("groupName");
+                        log.info("Generating BPMN: Stage {} configured for Group Queue: {}", stage.getStageCode(), group);
                         if (group != null)
                             userTask.setCandidateGroups(List.of(group));
                     } else if ("ROUND_ROBIN".equals(mechanism)) {
@@ -391,7 +392,7 @@ public class BpmnGeneratorService {
                         poolField.setStringValue(pool);
                         listener.setFieldExtensions(List.of(poolField));
                         userTask.setTaskListeners(new java.util.ArrayList<>(List.of(listener)));
-                    } else if ("MATRIX_RULE".equals(mechanism)) {
+                    } else if ("MATRIX_RULE".equals(mechanism) || "MATRIX".equals(mechanism)) {
                         FlowableListener listener = new FlowableListener();
                         listener.setImplementationType(ImplementationType.IMPLEMENTATION_TYPE_DELEGATEEXPRESSION);
                         listener.setImplementation("${matrixAssignmentListener}");

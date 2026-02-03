@@ -63,9 +63,18 @@ public class CaseService {
         }
     }
 
-    public List<CaseDTO> getAllActiveCases(String workflowCode, String initiator, String cpId) {
+    public List<CaseDTO> getAllActiveCases(String workflowCode, String initiator, String cpId, String candidateGroup) {
         org.flowable.engine.runtime.ProcessInstanceQuery query = runtimeService.createProcessInstanceQuery()
                 .orderByStartTime().desc();
+
+        if (candidateGroup != null && !candidateGroup.isEmpty()) {
+            List<Task> tasks = taskService.createTaskQuery().taskCandidateGroup(candidateGroup).list();
+            Set<String> pids = tasks.stream().map(Task::getProcessInstanceId).collect(java.util.stream.Collectors.toSet());
+            if (pids.isEmpty()) {
+                return new ArrayList<>();
+            }
+            query.processInstanceIds(pids);
+        }
 
         if (workflowCode != null && !workflowCode.isEmpty()) {
             query.processDefinitionKey(workflowCode);
@@ -267,6 +276,23 @@ public class CaseService {
         }
     }
 
+    @Transactional
+    public void claimTask(String taskId, String userId) {
+        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        if (task == null) {
+            throw new IllegalArgumentException("Task not found: " + taskId);
+        }
+        
+        // Ensure user is a candidate or task is unassigned
+        // Or we can rely on taskService.claim() which checks this usually, 
+        // but Flowable claim throws error if already claimed by someone else.
+        // We might want to allow "force claim" or check first.
+        // Standard claim:
+        taskService.claim(taskId, userId);
+        taskService.setVariableLocal(taskId, "savedAssignee", userId);
+        log.info("Task {} claimed by {}", taskId, userId);
+    }
+
     private CaseDTO mapToCaseDTO(ProcessInstance process) {
         CaseDTO dto = new CaseDTO();
         dto.setCaseId(process.getId());
@@ -394,6 +420,19 @@ public class CaseService {
                 task.getProcessInstanceId());
         dto.setStatus(status);
         dto.setProcessVariables(task.getProcessVariables());
+        
+        // Fetch Candidate Groups (Queue)
+        List<org.flowable.identitylink.api.IdentityLink> links = taskService.getIdentityLinksForTask(task.getId());
+        log.info("Task {} Identity Links: {}", task.getId(), links.stream().map(l -> l.getType() + ":" + l.getGroupId() + ":" + l.getUserId()).collect(java.util.stream.Collectors.toList()));
+        List<String> groups = links.stream()
+            .filter(l -> org.flowable.identitylink.api.IdentityLinkType.CANDIDATE.equals(l.getType()) && l.getGroupId() != null)
+            .map(org.flowable.identitylink.api.IdentityLink::getGroupId)
+            .collect(java.util.stream.Collectors.toList());
+        
+        if (!groups.isEmpty()) {
+            dto.setCandidateGroups(groups);
+        }
+        
         return dto;
     }
 
@@ -715,25 +754,7 @@ public class CaseService {
             String userName = userNames.getOrDefault(userId, userId);
 
             List<com.workflow.service.dto.UserWorkloadDTO.TaskSummaryDTO> taskSummaries = tasks.stream()
-                    .map(t -> {
-                        String workflowName = (String) t.getProcessVariables().get("workflowName");
-                        if (workflowName == null) {
-                            workflowName = t.getProcessDefinitionId().split(":")[0];
-                        }
-
-                        return com.workflow.service.dto.UserWorkloadDTO.TaskSummaryDTO.builder()
-                                .taskId(t.getId())
-                                .caseId(t.getProcessInstanceId())
-                                .stageName(t.getName())
-                                .stageCode(t.getTaskDefinitionKey())
-                                .createdTime(
-                                        LocalDateTime.ofInstant(t.getCreateTime().toInstant(), ZoneId.systemDefault()))
-                                .dueDate(t.getDueDate() != null
-                                        ? LocalDateTime.ofInstant(t.getDueDate().toInstant(), ZoneId.systemDefault())
-                                        : null)
-                                .workflowName(workflowName)
-                                .build();
-                    })
+                    .map(t -> mapToTaskSummary(t))
                     .collect(java.util.stream.Collectors.toList());
 
             result.add(com.workflow.service.dto.UserWorkloadDTO.builder()
@@ -748,6 +769,97 @@ public class CaseService {
         result.sort((a, b) -> Integer.compare(b.getPendingCount(), a.getPendingCount()));
 
         return result;
+    }
+
+    @Transactional(readOnly = true)
+    public List<com.workflow.service.dto.GroupWorkloadDTO> getGroupWorkload(List<String> groupIds) {
+        if (groupIds == null || groupIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<com.workflow.service.dto.GroupWorkloadDTO> result = new ArrayList<>();
+
+        for (String groupId : groupIds) {
+             List<Task> tasks = taskService.createTaskQuery()
+                    .taskCandidateGroup(groupId)
+                    .taskUnassigned() // Only show tasks waiting to be picked up
+                    .active()
+                    .includeProcessVariables()
+                    .orderByTaskCreateTime().desc()
+                    .list();
+             
+             // FALLBACK: If query returns empty, verify manually if any active tasks have this group
+             // This safeguards against potential indexing/query issues in Flowable
+             if (tasks.isEmpty()) {
+                 log.error(">>> [DIAGNOSTIC] Query for group '{}' returned 0 results. Starting manual scan.", groupId);
+                 List<Task> allActive = taskService.createTaskQuery().active().includeProcessVariables().list();
+                 log.info(">>> [DIAGNOSTIC] Total active tasks in system: {}", allActive.size());
+                 
+                 for (Task t : allActive) {
+                     // specific check: Must be unassigned
+                     if (t.getAssignee() != null) {
+                         continue;
+                     }
+
+                     List<org.flowable.identitylink.api.IdentityLink> links = taskService.getIdentityLinksForTask(t.getId());
+                     
+                     // Log all links for first few tasks or relevant ones
+                     List<String> linkStrings = links.stream().map(l -> l.getType() + ":" + l.getGroupId()).collect(java.util.stream.Collectors.toList());
+                     log.info(">>> [DIAGNOSTIC] Task {} (Name: {}) Links: {}", t.getId(), t.getName(), linkStrings);
+                     
+                     boolean match = links.stream()
+                         .anyMatch(l -> org.flowable.identitylink.api.IdentityLinkType.CANDIDATE.equals(l.getType()) 
+                                     && l.getGroupId() != null
+                                     && groupId.trim().equalsIgnoreCase(l.getGroupId().trim())); // LENIENT MATCH
+                     
+                     if (match) {
+                         log.error(">>> [DIAGNOSTIC] FOUND MATCH manually for task {} and group {}", t.getId(), groupId);
+                         tasks.add(t);
+                     }
+                 }
+                 // Re-sort if we added manual tasks
+                 if (!tasks.isEmpty()) {
+                     tasks.sort((a,b) -> b.getCreateTime().compareTo(a.getCreateTime()));
+                 } else {
+                     log.error(">>> [DIAGNOSTIC] Manual scan also found NO matches for group '{}'", groupId);
+                 }
+             }
+
+             com.workflow.service.util.LogHelper.logGroupQuery(groupId, tasks.size());
+             
+             List<com.workflow.service.dto.UserWorkloadDTO.TaskSummaryDTO> taskSummaries = tasks.stream()
+                    .map(t -> mapToTaskSummary(t))
+                    .collect(java.util.stream.Collectors.toList());
+             
+             result.add(com.workflow.service.dto.GroupWorkloadDTO.builder()
+                    .groupId(groupId)
+                    .groupName(groupId) // Use ID as name for now
+                    .pendingCount(tasks.size())
+                    .tasks(taskSummaries)
+                    .build());
+        }
+        
+        return result;
+    }
+
+    private com.workflow.service.dto.UserWorkloadDTO.TaskSummaryDTO mapToTaskSummary(Task t) {
+        String workflowName = (String) t.getProcessVariables().get("workflowName");
+        if (workflowName == null) {
+            workflowName = t.getProcessDefinitionId().split(":")[0];
+        }
+
+        return com.workflow.service.dto.UserWorkloadDTO.TaskSummaryDTO.builder()
+                .taskId(t.getId())
+                .caseId(t.getProcessInstanceId())
+                .stageName(t.getName())
+                .stageCode(t.getTaskDefinitionKey())
+                .createdTime(
+                        LocalDateTime.ofInstant(t.getCreateTime().toInstant(), ZoneId.systemDefault()))
+                .dueDate(t.getDueDate() != null
+                        ? LocalDateTime.ofInstant(t.getDueDate().toInstant(), ZoneId.systemDefault())
+                        : null)
+                .workflowName(workflowName)
+                .build();
     }
 
     public List<com.workflow.service.dto.UserStoryboardDTO> getUserStoryboard() {

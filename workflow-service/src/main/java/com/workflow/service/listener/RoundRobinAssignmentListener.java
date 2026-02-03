@@ -14,6 +14,7 @@ import java.util.Collections;
 import java.util.List;
 
 @Component("roundRobinAssignmentListener")
+@org.springframework.context.annotation.Scope(org.springframework.beans.factory.config.ConfigurableBeanFactory.SCOPE_PROTOTYPE)
 @RequiredArgsConstructor
 @Slf4j
 public class RoundRobinAssignmentListener implements TaskListener {
@@ -23,6 +24,7 @@ public class RoundRobinAssignmentListener implements TaskListener {
     private final com.workflow.service.service.CalendarService calendarService;
 
     // Injected via Field Extension
+    @lombok.Setter
     private Expression pool;
 
     @Override

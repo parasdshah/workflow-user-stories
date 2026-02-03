@@ -15,7 +15,11 @@ interface StageDTO {
     allowedActions?: string;
     actionTaken?: string;
     subProcessInstanceId?: string;
+    candidateGroups?: string[];
 }
+// ... (rest of file)
+
+
 
 function NestedTimeline({ caseId }: { caseId: string }) {
     const [stages, setStages] = useState<StageDTO[]>([]);
@@ -262,7 +266,11 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
                         })()}
 
                         <Text c="dimmed" size="sm">
-                            Assignee: {stage.assigneeName ? `${stage.assigneeName} (${stage.assignee})` : (stage.assignee || 'Unassigned')}
+                            Assignee: {stage.assigneeName ? `${stage.assigneeName} (${stage.assignee})` : (
+                                stage.assignee || (stage.candidateGroups && stage.candidateGroups.length > 0 ?
+                                    <Badge size="sm" color="orange" variant="light">Queue: {stage.candidateGroups.join(', ')}</Badge>
+                                    : 'Unassigned')
+                            )}
                         </Text>
                         <Text size="xs" mt={4}>
                             Created: {stage.createdTime ? new Date(stage.createdTime).toLocaleString() : '-'}

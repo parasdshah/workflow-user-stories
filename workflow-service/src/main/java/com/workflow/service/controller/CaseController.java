@@ -31,8 +31,9 @@ public class CaseController {
     public ResponseEntity<List<CaseDTO>> getAllActiveCases(
             @RequestParam(required = false) String workflowCode,
             @RequestParam(required = false) String initiator,
-            @RequestParam(required = false) String cpId) {
-        return ResponseEntity.ok(caseService.getAllActiveCases(workflowCode, initiator, cpId));
+            @RequestParam(required = false) String cpId,
+            @RequestParam(required = false) String candidateGroup) {
+        return ResponseEntity.ok(caseService.getAllActiveCases(workflowCode, initiator, cpId, candidateGroup));
     }
 
     @Operation(summary = "Initiate a new case", description = "Starts a new workflow case instance with the specified workflow code and variables")
@@ -128,5 +129,31 @@ public class CaseController {
     public ResponseEntity<com.workflow.service.dto.GraphDTO> getCaseGlobalGraph(
             @Parameter(description = "Case ID") @PathVariable String id) {
         return ResponseEntity.ok(caseService.getCaseGlobalGraph(id));
+    }
+
+    @Operation(summary = "Get group workload", description = "Retrieves workload for specified groups")
+    @ApiResponse(responseCode = "200", description = "Successfully retrieved group workload")
+    @GetMapping("/workload/groups")
+    public ResponseEntity<List<com.workflow.service.dto.GroupWorkloadDTO>> getGroupWorkload(
+            @Parameter(description = "List of Group IDs") @RequestParam List<String> groupIds) {
+        org.slf4j.LoggerFactory.getLogger(CaseController.class).info(">>> REST REQUEST: getGroupWorkload for groups: {}", groupIds);
+        return ResponseEntity.ok(caseService.getGroupWorkload(groupIds));
+    }
+
+    @Operation(summary = "Claim a task", description = "Assigns a candidate task to the specified user")
+    @ApiResponse(responseCode = "200", description = "Task claimed successfully")
+    @PostMapping("/{caseId}/tasks/{taskId}/claim")
+    public ResponseEntity<String> claimTask(
+            @Parameter(description = "Case ID") @PathVariable String caseId,
+            @Parameter(description = "Task ID") @PathVariable String taskId,
+            @Parameter(description = "User ID claiming the task") @RequestParam String userId) {
+        try {
+            caseService.claimTask(taskId, userId);
+            return ResponseEntity.ok("Task claimed");
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Error claiming task: " + e.getMessage());
+        }
     }
 }

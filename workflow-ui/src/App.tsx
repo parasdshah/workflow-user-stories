@@ -6,6 +6,7 @@ import WorkflowEditor from './pages/WorkflowEditor';
 import DeploymentHistory from './pages/DeploymentHistory';
 import TaskInbox from './pages/TaskInbox';
 import UserWorkload from './pages/UserWorkload';
+import GroupWorkload from './pages/GroupWorkload';
 import UserWorkloadStoryboard from './pages/UserWorkloadStoryboard';
 import DiagramPreview from './pages/DiagramPreview';
 import { ScreenDefinitionList } from './components/screens/ScreenDefinitionList';
@@ -46,6 +47,7 @@ function App() {
           <Route path="/admin/calendar" element={<HolidayCalendar />} />
           <Route path="/admin/leaves" element={<LeaveManagement />} />
           <Route path="/settings/availability" element={<AvailabilitySettings />} />
+          <Route path="/workload/groups" element={<GroupWorkload />} />
         </Routes>
       </BrowserRouter>
     </MantineProvider>
