@@ -29,6 +29,11 @@ public class EmployeeMatrixAssignment {
     private RefBusinessSegment scopeSegment; // Nullable (All Segments)
 
     @ManyToOne
+    @JoinColumn(name = "scope_sub_segment_id")
+    private RefBusinessSubSegment scopeSubSegment; // Nullable (All Sub Segments)
+
+
+    @ManyToOne
     @JoinColumn(name = "scope_product_id")
     private RefProduct scopeProduct; // Nullable (All Products)
 

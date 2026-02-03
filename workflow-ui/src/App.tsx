@@ -1,4 +1,5 @@
 import { MantineProvider } from '@mantine/core';
+import { Notifications } from '@mantine/notifications';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import WorkflowList from './pages/WorkflowList';
 import WorkflowEditor from './pages/WorkflowEditor';
@@ -18,10 +19,12 @@ import Header from './components/Header';
 
 import HolidayCalendar from './pages/HolidayCalendar';
 import AvailabilitySettings from './pages/AvailabilitySettings';
+import LeaveManagement from './pages/LeaveManagement';
 
 function App() {
   return (
     <MantineProvider>
+      <Notifications />
       <BrowserRouter>
         <Header />
         <Routes>
@@ -41,6 +44,7 @@ function App() {
           <Route path="/modules" element={<ModuleMaster />} />
           <Route path="/admin/hrms" element={<HrmsConsole />} />
           <Route path="/admin/calendar" element={<HolidayCalendar />} />
+          <Route path="/admin/leaves" element={<LeaveManagement />} />
           <Route path="/settings/availability" element={<AvailabilitySettings />} />
         </Routes>
       </BrowserRouter>

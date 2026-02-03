@@ -23,7 +23,7 @@ export default function HolidayCalendar() {
   const fetchHolidays = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:8080/api/holidays?region=${region}`);
+      const res = await fetch(`/api/holidays?region=${region}`);
       if (res.ok) {
         const data = await res.json();
         setHolidays(data);
@@ -56,14 +56,14 @@ export default function HolidayCalendar() {
       if (existing) {
         // Delete
         if (existing.id) {
-          await fetch(`http://localhost:8080/api/holidays/${existing.id}`, { method: 'DELETE' });
+          await fetch(`/api/holidays/${existing.id}`, { method: 'DELETE' });
           setHolidays(prev => prev.filter(h => h.id !== existing.id));
           notifications.show({ title: 'Removed', message: `Holiday removed for ${dateStr}`, color: 'blue' });
         }
       } else {
         // Create
         const newHoliday = { date: dateStr, region, description: 'Holiday' };
-        const res = await fetch('http://localhost:8080/api/holidays', {
+        const res = await fetch('/api/holidays', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(newHoliday),

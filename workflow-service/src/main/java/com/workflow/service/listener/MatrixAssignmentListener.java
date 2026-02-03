@@ -42,7 +42,19 @@ public class MatrixAssignmentListener implements TaskListener {
             // Product
             Object product = delegateTask.getVariable("product");
             if (product != null) {
-                req.setProduct(product.toString()); // Fixed: String setter
+                req.setProduct(product.toString()); 
+            }
+
+            // Business Segment
+            Object businessSegment = delegateTask.getVariable("businessSegment");
+            if (businessSegment != null) {
+                req.setBusinessSegment(businessSegment.toString());
+            }
+
+            // Business SubSegment
+            Object businessSubSegment = delegateTask.getVariable("businessSubSegment");
+            if (businessSubSegment != null) {
+                req.setBusinessSubSegment(businessSubSegment.toString());
             }
 
             // Amount
@@ -73,7 +85,11 @@ public class MatrixAssignmentListener implements TaskListener {
             } else {
                 delegateTask.addCandidateUsers(effectiveCandidates);
             }
-            log.info("Matrix Assignment: Found {} candidates (Delegation applied)", effectiveCandidates.size());
+            
+            // NEW: Add Role as Candidate Group to allow "Pool" querying
+            delegateTask.addCandidateGroup(roleCode);
+            
+            log.info("Matrix Assignment: Found {} candidates (Delegation applied), Group: {}", effectiveCandidates.size(), roleCode);
 
         } catch (Exception e) {
             log.error("Failed to execute Matrix assignment", e);

@@ -5,4 +5,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface RefBusinessSegmentRepository extends JpaRepository<RefBusinessSegment, Long> {}
+public interface RefBusinessSegmentRepository extends JpaRepository<RefBusinessSegment, Long> {
+    java.util.Optional<RefBusinessSegment> findBySegmentName(String segmentName);
+}

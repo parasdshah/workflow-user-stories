@@ -9,6 +9,8 @@ public class ResolutionRequest {
     private String role;           // e.g. "CREDIT_APPROVER"
     private String region;         // e.g. "Mumbai" (Name)
     private String product;        // e.g. "Home Loan"
+    private String businessSegment; // e.g. "Retail"
+    private String businessSubSegment; // e.g. "Retail-SME"
     private BigDecimal amount;     // e.g. 50000
     private Map<String, Object> context; // Extra arbitrary context
 }

@@ -16,6 +16,8 @@ public class HrmsManagementController {
     private final RoleMasterRepository roleRepo;
     private final RefRegionRepository regionRepo;
     private final RefProductRepository productRepo;
+    private final RefBusinessSegmentRepository segmentRepo; // Injected
+    private final RefBusinessSubSegmentRepository subSegmentRepo; // Injected
     private final EmployeeMatrixAssignmentRepository matrixRepo;
     private final EmployeeMasterRepository employeeRepo; // Needed to verify/fetch employee for assignment
 
@@ -61,6 +63,28 @@ public class HrmsManagementController {
     @PostMapping("/products")
     public ResponseEntity<RefProduct> createProduct(@RequestBody RefProduct product) {
         return ResponseEntity.ok(productRepo.save(product));
+    }
+
+    // --- SEGMENTS ---
+    @GetMapping("/segments")
+    public ResponseEntity<List<RefBusinessSegment>> getAllSegments() {
+        return ResponseEntity.ok(segmentRepo.findAll());
+    }
+
+    @PostMapping("/segments")
+    public ResponseEntity<RefBusinessSegment> createSegment(@RequestBody RefBusinessSegment segment) {
+        return ResponseEntity.ok(segmentRepo.save(segment));
+    }
+
+    // --- SUB-SEGMENTS ---
+    @GetMapping("/sub-segments")
+    public ResponseEntity<List<RefBusinessSubSegment>> getAllSubSegments() {
+        return ResponseEntity.ok(subSegmentRepo.findAll());
+    }
+
+    @PostMapping("/sub-segments")
+    public ResponseEntity<RefBusinessSubSegment> createSubSegment(@RequestBody RefBusinessSubSegment subSegment) {
+        return ResponseEntity.ok(subSegmentRepo.save(subSegment));
     }
 
     // --- ASSIGNMENTS ---

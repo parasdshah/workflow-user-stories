@@ -33,6 +33,11 @@ public class UserLeaveController {
         return leaveRepository.findByUserId(userId);
     }
 
+    @GetMapping
+    public List<UserLeave> getAllLeaves() {
+        return leaveRepository.findAll();
+    }
+
     @PostMapping
     public UserLeave createLeave(@RequestBody UserLeave leave) {
         // Validation: Verify if substitute exists or if user is already OOO could be

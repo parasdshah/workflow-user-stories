@@ -18,6 +18,8 @@ public class MatrixResolutionService {
 
     private final RefRegionRepository regionRepo;
     private final RefProductRepository productRepo;
+    private final RefBusinessSegmentRepository segmentRepo; // Injected
+    private final RefBusinessSubSegmentRepository subSegmentRepo; // Injected
     private final EmployeeMatrixAssignmentRepository matrixRepo;
 
     @Transactional(readOnly = true)
@@ -28,11 +30,23 @@ public class MatrixResolutionService {
         
         List<Long> regionScopeIds = parseRegionPath(targetRegion.getPath());
         
-        // 2. Resolve Product & Segment
+        // 2. Resolve Product & Segment & SubSegment
         RefProduct targetProduct = null;
         if (request.getProduct() != null) {
             targetProduct = productRepo.findByProductName(request.getProduct())
                     .orElseThrow(() -> new IllegalArgumentException("Product not found: " + request.getProduct()));
+        }
+
+        RefBusinessSegment targetSegment = null;
+        if (request.getBusinessSegment() != null) {
+            targetSegment = segmentRepo.findBySegmentName(request.getBusinessSegment())
+                    .orElseThrow(() -> new IllegalArgumentException("Segment not found: " + request.getBusinessSegment()));
+        }
+
+        RefBusinessSubSegment targetSubSegment = null;
+        if (request.getBusinessSubSegment() != null) {
+            targetSubSegment = subSegmentRepo.findBySubSegmentName(request.getBusinessSubSegment())
+                    .orElseThrow(() -> new IllegalArgumentException("SubSegment not found: " + request.getBusinessSubSegment()));
         }
 
         // 3. Query Matrix (Find all candidates in the region chain)
@@ -41,8 +55,11 @@ public class MatrixResolutionService {
 
         // 4. Filter & Score
         RefProduct finalProduct = targetProduct;
+        RefBusinessSegment finalSegment = targetSegment;
+        RefBusinessSubSegment finalSubSegment = targetSubSegment;
+
         Optional<EmployeeMatrixAssignment> bestMatch = candidates.stream()
-                .filter(a -> isProductMatch(a, finalProduct))
+                .filter(a -> isScopeMatch(a, finalProduct, finalSegment, finalSubSegment))
                 .filter(a -> isAmountCovered(a, request.getAmount(), request.getContext()))
                 .max(Comparator.comparing(this::calculateSpecificity)); // Max score wins
 
@@ -68,27 +85,42 @@ public class MatrixResolutionService {
                 .collect(Collectors.toList());
     }
 
-    private boolean isProductMatch(EmployeeMatrixAssignment assignment, RefProduct targetProduct) {
-        // Case A: Assignment is Global (No Segment/Product Scope) -> Matches Everything
-        if (assignment.getScopeSegment() == null && assignment.getScopeProduct() == null) {
+    private boolean isScopeMatch(EmployeeMatrixAssignment assignment, 
+                                 RefProduct targetProduct, 
+                                 RefBusinessSegment targetSegment,
+                                 RefBusinessSubSegment targetSubSegment) {
+        
+        // Case A: Assignment is Global (No Scope) -> Matches Everything
+        if (assignment.getScopeProduct() == null && 
+            assignment.getScopeSegment() == null && 
+            assignment.getScopeSubSegment() == null) {
             return true;
         }
 
-        if (targetProduct == null) {
-            // Request has no product, but Assignment has scope. 
-            // Strict mode: Only Generic Assignments match Generic Requests.
-            return assignment.getScopeProduct() == null && assignment.getScopeSegment() == null;
-        }
-
-        // Case B: Assignment is Product Specific
+        // Case B: Product Match (Highest Specificity)
         if (assignment.getScopeProduct() != null) {
-            return assignment.getScopeProduct().getProductId().equals(targetProduct.getProductId());
+            return targetProduct != null && assignment.getScopeProduct().getProductId().equals(targetProduct.getProductId());
         }
 
-        // Case C: Assignment is Segment Specific
+        // Case C: SubSegment Match
+        if (assignment.getScopeSubSegment() != null) {
+             return targetSubSegment != null && assignment.getScopeSubSegment().getSubSegmentId().equals(targetSubSegment.getSubSegmentId());
+        }
+
+        // Case D: Segment Match
         if (assignment.getScopeSegment() != null) {
-            // Match if Target Product belongs to Assignment's Segment
-            return targetProduct.getSegment().getSegmentId().equals(assignment.getScopeSegment().getSegmentId());
+            // Match if Target Segment matches Assignment Segment
+            if (targetSegment != null && assignment.getScopeSegment().getSegmentId().equals(targetSegment.getSegmentId())) {
+                return true;
+            }
+            // Match if Target SubSegment belongs to Assignment Segment
+            if (targetSubSegment != null && targetSubSegment.getBusinessSegment().getSegmentId().equals(assignment.getScopeSegment().getSegmentId())) {
+                return true;
+            }
+            // Match if Target Product belongs to Assignment Segment
+             if (targetProduct != null && targetProduct.getSegment().getSegmentId().equals(assignment.getScopeSegment().getSegmentId())) {
+                return true;
+            }
         }
 
         return false;
@@ -100,8 +132,6 @@ public class MatrixResolutionService {
         }
         
         // TODO: Currency Conversion (Assuming request is in Base/Assignment Currency for MVP)
-        // In real world, check assignment.getCurrencyCode() vs request currency
-        
         BigDecimal limit = assignment.getApprovalLimit();
         if (limit == null) return false;
 
@@ -112,11 +142,11 @@ public class MatrixResolutionService {
         int score = 0;
         
         // Product Specificity
-        if (a.getScopeProduct() != null) score += 100;       // Exact Product match (Home Loan Manager)
-        else if (a.getScopeSegment() != null) score += 50;   // Segment match (Retail Head)
+        if (a.getScopeProduct() != null) score += 100;       // Exact Product match
+        else if (a.getScopeSubSegment() != null) score += 75; // SubSegment match
+        else if (a.getScopeSegment() != null) score += 50;   // Segment match
         
         // Region Specificity (Deeper is better)
-        // We use path length as a proxy for depth
         score += a.getScopeRegion().getPath().length(); 
         
         return score;

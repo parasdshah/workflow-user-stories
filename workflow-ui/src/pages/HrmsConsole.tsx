@@ -38,20 +38,26 @@ function MatrixAssignmentsPanel() {
     const [employees, setEmployees] = useState<any[]>([]);
     const [roles, setRoles] = useState<any[]>([]);
     const [regions, setRegions] = useState<any[]>([]);
+    const [segments, setSegments] = useState<any[]>([]);
+    const [subSegments, setSubSegments] = useState<any[]>([]);
 
     const fetchData = async () => {
         try {
-            const [aRes, eRes, rRes, regRes] = await Promise.all([
+            const [aRes, eRes, rRes, regRes, sRes, ssRes] = await Promise.all([
                 fetch('/api/hrms/assignments'),
                 fetch('/api/hrms/employees'),
                 fetch('/api/hrms/roles'),
-                fetch('/api/hrms/regions')
+                fetch('/api/hrms/regions'),
+                fetch('/api/hrms/segments'),
+                fetch('/api/hrms/sub-segments')
             ]);
 
             setAssignments(aRes.ok ? await aRes.json() : []);
             setEmployees(eRes.ok ? await eRes.json() : []);
             setRoles(rRes.ok ? await rRes.json() : []);
             setRegions(regRes.ok ? await regRes.json() : []);
+            setSegments(sRes.ok ? await sRes.json() : []);
+            setSubSegments(ssRes.ok ? await ssRes.json() : []);
         } catch (e) {
             console.error("Failed to load Matrix Data", e);
         }
@@ -66,6 +72,8 @@ function MatrixAssignmentsPanel() {
             employeeId: '',
             roleCode: '',
             regionId: '',
+            segmentId: '',
+            subSegmentId: '',
             limit: 0
         }
     });
@@ -75,8 +83,10 @@ function MatrixAssignmentsPanel() {
             employee: { employeeId: values.employeeId },
             role: { roleCode: values.roleCode },
             scopeRegion: { regionId: values.regionId },
+            scopeSegment: values.segmentId ? { segmentId: parseInt(values.segmentId) } : null,
+            scopeSubSegment: values.subSegmentId ? { subSegmentId: parseInt(values.subSegmentId) } : null,
             approvalLimit: values.limit,
-            currencyCode: 'USD', // Simplified
+            currencyCode: 'USD',
             denomination: 'ACTUALS'
         };
 
@@ -102,6 +112,7 @@ function MatrixAssignmentsPanel() {
                         <Table.Th>Employee</Table.Th>
                         <Table.Th>Role</Table.Th>
                         <Table.Th>Scope Region</Table.Th>
+                        <Table.Th>Scope Segment</Table.Th>
                         <Table.Th>Approval Limit</Table.Th>
                     </Table.Tr>
                 </Table.Thead>
@@ -111,6 +122,13 @@ function MatrixAssignmentsPanel() {
                             <Table.Td>{row.employee?.fullName} ({row.employee?.employeeId})</Table.Td>
                             <Table.Td>{row.role?.roleName}</Table.Td>
                             <Table.Td>{row.scopeRegion?.regionName}</Table.Td>
+                            <Table.Td>
+                                {row.scopeSegment?.segmentName || row.scopeSubSegment?.subSegmentName ? (
+                                    <Text size="sm">{row.scopeSegment?.segmentName} {row.scopeSubSegment ? `> ${row.scopeSubSegment.subSegmentName}` : ''}</Text>
+                                ) : (
+                                    <Text size="sm" c="dimmed">Global</Text>
+                                )}
+                            </Table.Td>
                             <Table.Td>{row.approvalLimit} {row.currencyCode}</Table.Td>
                         </Table.Tr>
                     ))}
@@ -139,6 +157,23 @@ function MatrixAssignmentsPanel() {
                             searchable
                             required
                             {...form.getInputProps('regionId')}
+                        />
+                        <Select
+                            label="Scope Segment"
+                            data={segments.map(s => ({ value: String(s.segmentId), label: s.segmentName }))}
+                            placeholder="Optional (All Segments)"
+                            clearable
+                            {...form.getInputProps('segmentId')}
+                        />
+                        <Select
+                            label="Scope Sub-Segment"
+                            data={subSegments
+                                .filter(ss => !form.values.segmentId || String(ss.businessSegment?.segmentId) === form.values.segmentId)
+                                .map(ss => ({ value: String(ss.subSegmentId), label: ss.subSegmentName }))}
+                            placeholder="Optional (All Sub-Segments)"
+                            disabled={!form.values.segmentId}
+                            clearable
+                            {...form.getInputProps('subSegmentId')}
                         />
                         <NumberInput
                             label="Approval Limit (USD)"

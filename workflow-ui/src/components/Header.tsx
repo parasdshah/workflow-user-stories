@@ -56,6 +56,9 @@ function Header() {
                                 <Menu.Item leftSection={<IconCalendar size={14} />} onClick={() => navigate('/admin/calendar')}>
                                     Holiday Calendar
                                 </Menu.Item>
+                                <Menu.Item leftSection={<IconCalendar size={14} />} onClick={() => navigate('/admin/leaves')}>
+                                    Leave Management (Admin)
+                                </Menu.Item>
                                 <Menu.Divider />
                                 <Menu.Item leftSection={<IconDeviceDesktop size={14} />} onClick={() => navigate('/screens')}>
                                     Screens

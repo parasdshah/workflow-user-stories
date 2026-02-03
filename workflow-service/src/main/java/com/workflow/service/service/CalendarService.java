@@ -36,8 +36,16 @@ public class CalendarService {
      * Returns null if user is available.
      */
     public UserLeave getActiveLeave(String userId) {
-        return leaveRepository.findActiveLeave(userId, LocalDateTime.now())
-                .orElse(null);
+        List<UserLeave> leaves = leaveRepository.findActiveLeave(userId, LocalDateTime.now());
+        if (leaves == null || leaves.isEmpty()) {
+            return null;
+        }
+        // If multiple active leaves exist, pick the first one.
+        // Ideally, we should prevent overlapping leaves in creation logic, but this persists robustness.
+        if (leaves.size() > 1) {
+            log.warn("User {} has {} active overlapping leaves. Using the first one.", userId, leaves.size());
+        }
+        return leaves.get(0);
     }
 
     /**

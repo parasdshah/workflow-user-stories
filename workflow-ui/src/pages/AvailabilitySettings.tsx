@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Container, Title, Paper, Switch, Group, Select, Button, LoadingOverlay, Alert } from '@mantine/core';
+import { Container, Title, Paper, Switch, Group, Select, Button, LoadingOverlay, Alert, Table, Text } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
@@ -32,9 +32,12 @@ export default function AvailabilitySettings() {
         fetchEmployees();
     }, []);
 
+    const [myLeaves, setMyLeaves] = useState<UserLeave[]>([]);
+
     useEffect(() => {
         if (userId) {
             fetchActiveLeave();
+            fetchMyLeaves();
         }
     }, [userId]);
 
@@ -57,7 +60,7 @@ export default function AvailabilitySettings() {
     const fetchActiveLeave = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`http://localhost:8080/api/user-leaves/active/${userId}`);
+            const res = await fetch(`/api/user-leaves/active/${userId}`);
             if (res.status === 200) {
                 const data = await res.json();
                 setActiveLeave(data);
@@ -77,13 +80,25 @@ export default function AvailabilitySettings() {
         }
     };
 
+    const fetchMyLeaves = async () => {
+        try {
+            const res = await fetch(`/api/user-leaves/user/${userId}`);
+            if (res.ok) {
+                setMyLeaves(await res.json());
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
     const handleSave = async (values: typeof form.values) => {
         if (!values.oooEnabled) {
-            // Turning off OOO
+            // Turning off OOO (Delete active leave)
             if (activeLeave && activeLeave.id) {
-                await fetch(`http://localhost:8080/api/user-leaves/${activeLeave.id}`, { method: 'DELETE' });
+                await fetch(`/api/user-leaves/${activeLeave.id}`, { method: 'DELETE' });
                 notifications.show({ title: 'Success', message: 'You are now marked as Available', color: 'blue' });
                 setActiveLeave(null);
+                fetchMyLeaves(); // Refresh list
             }
             return;
         }
@@ -125,7 +140,7 @@ export default function AvailabilitySettings() {
         };
 
         try {
-            const res = await fetch('http://localhost:8080/api/user-leaves', {
+            const res = await fetch('/api/user-leaves', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -133,6 +148,7 @@ export default function AvailabilitySettings() {
             if (res.ok) {
                 const data = await res.json();
                 setActiveLeave(data);
+                fetchMyLeaves(); // Refresh list
                 notifications.show({ title: 'Saved', message: 'Out of Office settings saved', color: 'green' });
             }
         } catch (err) {
@@ -140,12 +156,32 @@ export default function AvailabilitySettings() {
         }
     };
 
+    const handleDeleteLeave = async (id: number) => {
+        if (!confirm('Are you sure you want to delete this leave?')) return;
+        try {
+            await fetch(`/api/user-leaves/${id}`, { method: 'DELETE' });
+            notifications.show({ title: 'Deleted', message: 'Leave record removed', color: 'blue' });
+            fetchMyLeaves();
+            if (activeLeave?.id === id) {
+                setActiveLeave(null);
+                form.setValues({ oooEnabled: false, dateRange: [null, null], substitute: '' });
+            }
+        } catch (e) {
+            notifications.show({ title: 'Error', message: 'Failed to delete leave', color: 'red' });
+        }
+    };
+
     const employeeOptions = employees.map(e => ({ value: e.employeeId, label: `${e.fullName} (${e.employeeId})` }));
     const substituteOptions = employeeOptions.filter(e => e.value !== userId);
 
+    const getEmployeeName = (id: string) => {
+        const emp = employees.find(e => e.employeeId === id);
+        return emp ? `${emp.fullName} (${id})` : id;
+    };
+
     return (
         <Container size="sm" py="xl">
-            <Paper p="xl" withBorder>
+            <Paper p="xl" withBorder mb="xl">
                 <Title order={2} mb="lg">Availability & Delegation</Title>
 
                 <Select
@@ -180,7 +216,8 @@ export default function AvailabilitySettings() {
                                 placeholder="Pick dates range"
                                 mb="md"
                                 required
-                                {...form.getInputProps('dateRange')}
+                                {...form.getInputProps('dateRange', { type: 'checkbox' })}
+                                onChange={(val: any) => form.setFieldValue('dateRange', val)}
                             />
 
                             <Select
@@ -200,6 +237,42 @@ export default function AvailabilitySettings() {
                     </Group>
                 </form>
             </Paper>
+
+            {myLeaves.length > 0 && (
+                <Paper p="xl" withBorder>
+                    <Title order={3} mb="md">My Scheduled Leaves</Title>
+                    <Table striped highlightOnHover>
+                        <Table.Thead>
+                            <Table.Tr>
+                                <Table.Th>From</Table.Th>
+                                <Table.Th>To</Table.Th>
+                                <Table.Th>Substitute</Table.Th>
+                                <Table.Th>Status</Table.Th>
+                                <Table.Th>Action</Table.Th>
+                            </Table.Tr>
+                        </Table.Thead>
+                        <Table.Tbody>
+                            {myLeaves.map(leave => (
+                                <Table.Tr key={leave.id}>
+                                    <Table.Td>{new Date(leave.fromDate).toLocaleDateString()}</Table.Td>
+                                    <Table.Td>{new Date(leave.toDate).toLocaleDateString()}</Table.Td>
+                                    <Table.Td>{getEmployeeName(leave.substituteUserId)}</Table.Td>
+                                    <Table.Td>
+                                        <Text c={leave.active ? 'green' : 'dimmed'} size="sm">
+                                            {leave.active ? 'Active' : 'Inactive'}
+                                        </Text>
+                                    </Table.Td>
+                                    <Table.Td>
+                                        <Button color="red" variant="subtle" size="xs" onClick={() => leave.id && handleDeleteLeave(leave.id)}>
+                                            Delete
+                                        </Button>
+                                    </Table.Td>
+                                </Table.Tr>
+                            ))}
+                        </Table.Tbody>
+                    </Table>
+                </Paper>
+            )}
         </Container>
     );
 }
