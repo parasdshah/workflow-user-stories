@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 public class MatrixAssignmentListener implements TaskListener {
 
     private final UserAdapterClient userAdapterClient;
+    private final com.workflow.service.service.CalendarService calendarService;
 
     // Injected via Field Extension
     private Expression role;
@@ -31,7 +32,7 @@ public class MatrixAssignmentListener implements TaskListener {
             // Build Request from Process Variables
             ResolutionRequest req = new ResolutionRequest();
             req.setRole(roleCode); // Fixed: String setter
-            
+
             // Region
             Object scopeRegion = delegateTask.getVariable("scopeRegion");
             if (scopeRegion != null) {
@@ -48,8 +49,10 @@ public class MatrixAssignmentListener implements TaskListener {
             Object amount = delegateTask.getVariable("amount");
             if (amount != null) {
                 try {
-                     req.setAmount(new BigDecimal(amount.toString()));
-                } catch(Exception e) { log.warn("Invalid amount variable", e); }
+                    req.setAmount(new BigDecimal(amount.toString()));
+                } catch (Exception e) {
+                    log.warn("Invalid amount variable", e);
+                }
             }
 
             List<String> candidates = userAdapterClient.resolveUsers(req);
@@ -59,12 +62,18 @@ public class MatrixAssignmentListener implements TaskListener {
                 return;
             }
 
-            if (candidates.size() == 1) {
-                delegateTask.setAssignee(candidates.get(0));
+            // DELEGATION LOGIC: Check substitutes for all candidates
+            List<String> effectiveCandidates = candidates.stream()
+                    .map(calendarService::getEffectiveAssignee)
+                    .distinct()
+                    .toList();
+
+            if (effectiveCandidates.size() == 1) {
+                delegateTask.setAssignee(effectiveCandidates.get(0));
             } else {
-                delegateTask.addCandidateUsers(candidates);
+                delegateTask.addCandidateUsers(effectiveCandidates);
             }
-            log.info("Matrix Assignment: Found {} candidates", candidates.size());
+            log.info("Matrix Assignment: Found {} candidates (Delegation applied)", effectiveCandidates.size());
 
         } catch (Exception e) {
             log.error("Failed to execute Matrix assignment", e);

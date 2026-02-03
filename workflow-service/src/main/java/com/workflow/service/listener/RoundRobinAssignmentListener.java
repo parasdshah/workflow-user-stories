@@ -20,6 +20,7 @@ public class RoundRobinAssignmentListener implements TaskListener {
 
     private final UserAdapterClient userAdapterClient;
     private final HistoryService historyService;
+    private final com.workflow.service.service.CalendarService calendarService;
 
     // Injected via Field Extension
     private Expression pool;
@@ -89,8 +90,15 @@ public class RoundRobinAssignmentListener implements TaskListener {
                 log.info("Round Robin: No previous tasks found. Assigning to first candidate.");
             }
 
-            log.info("Round Robin: Assigned {} from pool of {}", nextAssignee, candidates.size());
-            delegateTask.setAssignee(nextAssignee);
+            // DELEGATION LOGIC START
+            String finalAssignee = calendarService.getEffectiveAssignee(nextAssignee);
+            if (!finalAssignee.equals(nextAssignee)) {
+                log.info("Round Robin: Delegating from {} to {}", nextAssignee, finalAssignee);
+            }
+            // DELEGATION LOGIC END
+
+            log.info("Round Robin: Assigned {} from pool of {}", finalAssignee, candidates.size());
+            delegateTask.setAssignee(finalAssignee);
 
         } catch (Exception e) {
             log.error("Failed to execute Round Robin assignment", e);

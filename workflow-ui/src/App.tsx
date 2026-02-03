@@ -16,6 +16,9 @@ import ModuleMaster from './pages/ModuleMaster';
 import { HrmsConsole } from './pages/HrmsConsole';
 import Header from './components/Header';
 
+import HolidayCalendar from './pages/HolidayCalendar';
+import AvailabilitySettings from './pages/AvailabilitySettings';
+
 function App() {
   return (
     <MantineProvider>
@@ -37,6 +40,8 @@ function App() {
           <Route path="/rules" element={<RuleManagement />} />
           <Route path="/modules" element={<ModuleMaster />} />
           <Route path="/admin/hrms" element={<HrmsConsole />} />
+          <Route path="/admin/calendar" element={<HolidayCalendar />} />
+          <Route path="/settings/availability" element={<AvailabilitySettings />} />
         </Routes>
       </BrowserRouter>
     </MantineProvider>

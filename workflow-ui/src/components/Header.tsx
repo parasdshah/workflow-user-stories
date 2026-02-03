@@ -1,6 +1,6 @@
 import { Group, Button, Title, Container, Paper, Menu } from '@mantine/core';
 import { useNavigate } from 'react-router-dom';
-import { IconList, IconHistory, IconInbox, IconFileAnalytics, IconSettings, IconChartBar, IconDeviceDesktop, IconGavel, IconPackage, IconUsers } from '@tabler/icons-react';
+import { IconList, IconHistory, IconInbox, IconFileAnalytics, IconSettings, IconChartBar, IconDeviceDesktop, IconGavel, IconPackage, IconUsers, IconCalendar } from '@tabler/icons-react';
 import ServiceHealth from './ServiceHealth';
 
 function Header() {
@@ -38,6 +38,10 @@ function Header() {
                                 <Menu.Item leftSection={<IconChartBar size={14} />} onClick={() => navigate('/storyboard')}>
                                     Workload Storyboard
                                 </Menu.Item>
+                                <Menu.Divider />
+                                <Menu.Item leftSection={<IconSettings size={14} />} onClick={() => navigate('/settings/availability')}>
+                                    My Availability (OOO)
+                                </Menu.Item>
                             </Menu.Dropdown>
                         </Menu>
 
@@ -49,6 +53,10 @@ function Header() {
                                 </Button>
                             </Menu.Target>
                             <Menu.Dropdown>
+                                <Menu.Item leftSection={<IconCalendar size={14} />} onClick={() => navigate('/admin/calendar')}>
+                                    Holiday Calendar
+                                </Menu.Item>
+                                <Menu.Divider />
                                 <Menu.Item leftSection={<IconDeviceDesktop size={14} />} onClick={() => navigate('/screens')}>
                                     Screens
                                 </Menu.Item>
