@@ -293,6 +293,36 @@ public class CaseService {
         log.info("Task {} claimed by {}", taskId, userId);
     }
 
+    @Transactional
+    public void reassignTask(String taskId, String newAssignee, String reason, String adminUserId) {
+        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        if (task == null) {
+            throw new IllegalArgumentException("Task not found: " + taskId);
+        }
+
+        String oldAssignee = task.getAssignee();
+        String processInstanceId = task.getProcessInstanceId();
+
+        // 1. Audit Trail via Comments
+        // Format: "Reassigned from [Old] to [New] by [Admin]. Reason: [Reason]"
+        String message = String.format("Reassigned from %s to %s by %s. Reason: %s", 
+            oldAssignee == null ? "Unassigned" : oldAssignee, 
+            newAssignee, 
+            adminUserId, 
+            reason);
+        
+        taskService.addComment(taskId, processInstanceId, "REASSIGNMENT", message);
+        
+        // 2. Perform Reassignment
+        taskService.setAssignee(taskId, newAssignee);
+        
+        // 3. Persist for History
+        taskService.setVariableLocal(taskId, "savedAssignee", newAssignee);
+        
+        // 4. Log
+        log.info("Task {} reassigned: {}", taskId, message);
+    }
+
     private CaseDTO mapToCaseDTO(ProcessInstance process) {
         CaseDTO dto = new CaseDTO();
         dto.setCaseId(process.getId());
@@ -788,43 +818,6 @@ public class CaseService {
                     .orderByTaskCreateTime().desc()
                     .list();
              
-             // FALLBACK: If query returns empty, verify manually if any active tasks have this group
-             // This safeguards against potential indexing/query issues in Flowable
-             if (tasks.isEmpty()) {
-                 log.error(">>> [DIAGNOSTIC] Query for group '{}' returned 0 results. Starting manual scan.", groupId);
-                 List<Task> allActive = taskService.createTaskQuery().active().includeProcessVariables().list();
-                 log.info(">>> [DIAGNOSTIC] Total active tasks in system: {}", allActive.size());
-                 
-                 for (Task t : allActive) {
-                     // specific check: Must be unassigned
-                     if (t.getAssignee() != null) {
-                         continue;
-                     }
-
-                     List<org.flowable.identitylink.api.IdentityLink> links = taskService.getIdentityLinksForTask(t.getId());
-                     
-                     // Log all links for first few tasks or relevant ones
-                     List<String> linkStrings = links.stream().map(l -> l.getType() + ":" + l.getGroupId()).collect(java.util.stream.Collectors.toList());
-                     log.info(">>> [DIAGNOSTIC] Task {} (Name: {}) Links: {}", t.getId(), t.getName(), linkStrings);
-                     
-                     boolean match = links.stream()
-                         .anyMatch(l -> org.flowable.identitylink.api.IdentityLinkType.CANDIDATE.equals(l.getType()) 
-                                     && l.getGroupId() != null
-                                     && groupId.trim().equalsIgnoreCase(l.getGroupId().trim())); // LENIENT MATCH
-                     
-                     if (match) {
-                         log.error(">>> [DIAGNOSTIC] FOUND MATCH manually for task {} and group {}", t.getId(), groupId);
-                         tasks.add(t);
-                     }
-                 }
-                 // Re-sort if we added manual tasks
-                 if (!tasks.isEmpty()) {
-                     tasks.sort((a,b) -> b.getCreateTime().compareTo(a.getCreateTime()));
-                 } else {
-                     log.error(">>> [DIAGNOSTIC] Manual scan also found NO matches for group '{}'", groupId);
-                 }
-             }
-
              com.workflow.service.util.LogHelper.logGroupQuery(groupId, tasks.size());
              
              List<com.workflow.service.dto.UserWorkloadDTO.TaskSummaryDTO> taskSummaries = tasks.stream()

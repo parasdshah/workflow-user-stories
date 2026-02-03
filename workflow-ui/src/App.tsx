@@ -1,3 +1,5 @@
+import AdminCaseList from './pages/AdminCaseList';
+
 import { MantineProvider } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
@@ -46,6 +48,7 @@ function App() {
           <Route path="/admin/hrms" element={<HrmsConsole />} />
           <Route path="/admin/calendar" element={<HolidayCalendar />} />
           <Route path="/admin/leaves" element={<LeaveManagement />} />
+          <Route path="/admin/cases" element={<AdminCaseList />} />
           <Route path="/settings/availability" element={<AvailabilitySettings />} />
           <Route path="/workload/groups" element={<GroupWorkload />} />
         </Routes>

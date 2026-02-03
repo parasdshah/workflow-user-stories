@@ -99,9 +99,10 @@ function NestedTimeline({ caseId }: { caseId: string }) {
 interface CaseTimelineProps {
     stages: StageDTO[];
     onAction?: (taskId: string, outcome?: string, variablesJson?: string) => void;
+    onReassign?: (taskId: string, taskName: string, assignee?: string) => void;
 }
 
-export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
+export function CaseTimeline({ stages, onAction, onReassign }: CaseTimelineProps) {
     // Sort logic handled by backend, but safe to verify if needed
 
     const getBullet = (status: string) => {
@@ -313,9 +314,10 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
                         {stage.status === 'ACTIVE' && (
                             <Group mt="xs">
                                 <Badge color="blue" size="xs">In Progress</Badge>
-                                {stage.taskId && onAction && (
+                                {stage.taskId && (
                                     <>
-                                        {stage.allowedActions ? (() => {
+                                        {/* Standard Actions */}
+                                        {onAction && stage.allowedActions ? (() => {
                                             try {
                                                 const parsed = JSON.parse(stage.allowedActions);
                                                 // Handle Array of Strings (Legacy) or Array of Objects (New)
@@ -362,8 +364,20 @@ export function CaseTimeline({ stages, onAction }: CaseTimelineProps) {
                                                 ));
                                             }
                                         })() : (
-                                            <Button size="xs" variant="outline" onClick={() => initiateAction(stage.taskId!, undefined, stage.allowedActions)}>
+                                            onAction && <Button size="xs" variant="outline" onClick={() => initiateAction(stage.taskId!, undefined, stage.allowedActions)}>
                                                 Complete
+                                            </Button>
+                                        )}
+
+                                        {/* Reassign Button (Admin) */}
+                                        {onReassign && (
+                                            <Button
+                                                size="xs"
+                                                variant="light"
+                                                color="orange"
+                                                onClick={() => onReassign(stage.taskId!, stage.stageName, stage.assignee)}
+                                            >
+                                                Reassign
                                             </Button>
                                         )}
                                     </>

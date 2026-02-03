@@ -5,6 +5,8 @@ import { CaseTimeline } from '../components/cases/CaseTimeline';
 import { GlobalProcessVisualizer } from '../components/bpmn/GlobalProcessVisualizer';
 import { IconList, IconMap } from '@tabler/icons-react';
 
+import ReassignModal from '../components/ReassignModal';
+
 interface CaseDTO {
     caseId: string;
     workflowCode: string;
@@ -33,6 +35,13 @@ export default function CaseView() {
     const [caseDetails, setCaseDetails] = useState<CaseDTO | null>(null);
     const [stages, setStages] = useState<StageDTO[]>([]);
     const [loading, setLoading] = useState(true);
+
+    const [reassignModalProps, setReassignModalProps] = useState({
+        opened: false,
+        taskId: '',
+        taskName: '',
+        currentAssignee: undefined as string | undefined
+    });
 
     useEffect(() => {
         if (!id) return;
@@ -168,7 +177,18 @@ export default function CaseView() {
                         </Tabs.List>
 
                         <Tabs.Panel value="timeline" pt="xs">
-                            <CaseTimeline stages={stages} onAction={handleTaskAction} />
+                            <CaseTimeline
+                                stages={stages}
+                                onAction={handleTaskAction}
+                                onReassign={(taskId, taskName, assignee) => {
+                                    setReassignModalProps({
+                                        opened: true,
+                                        taskId,
+                                        taskName,
+                                        currentAssignee: assignee
+                                    });
+                                }}
+                            />
                         </Tabs.Panel>
 
                         <Tabs.Panel value="map" pt="xs">
@@ -177,6 +197,19 @@ export default function CaseView() {
                     </Tabs>
                 </Grid.Col>
             </Grid>
+
+            <ReassignModal
+                opened={reassignModalProps.opened}
+                onClose={() => setReassignModalProps({ ...reassignModalProps, opened: false })}
+                caseId={id!}
+                taskId={reassignModalProps.taskId}
+                taskName={reassignModalProps.taskName}
+                currentAssignee={reassignModalProps.currentAssignee}
+                onSuccess={() => {
+                    // Reload data
+                    window.location.reload();
+                }}
+            />
         </Container>
     );
 }
