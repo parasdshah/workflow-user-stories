@@ -1,8 +1,9 @@
-import { Paper, SegmentedControl, Stack, Text, TextInput, Group, Select, Button, ActionIcon, Card, SimpleGrid, Badge } from '@mantine/core';
+import { Paper, SegmentedControl, Stack, Text, TextInput, Group, Select, Button, ActionIcon, Card, SimpleGrid, Badge, Checkbox } from '@mantine/core'; // Added Checkbox
 import { IconTrash } from '@tabler/icons-react';
 import { useState, useEffect } from 'react';
+import React from 'react'; // Ensure React is imported for types
 
-// Define the structure of our Assignment Rule
+
 export interface AssignmentRule {
     variable: string; // amount, region, etc
     operator: string; // >, <, ==
@@ -107,7 +108,8 @@ export function AssignmentBuilder({ value, onChange }: AssignmentBuilderProps) {
                         { label: 'Group Queue', value: 'GROUP' },
                         { label: 'Round Robin', value: 'ROUND_ROBIN' },
                         { label: 'Matrix Rules', value: 'MATRIX' },
-                        { label: 'Manual', value: 'MANUAL' }
+                        { label: 'Manual', value: 'MANUAL' },
+                        { label: 'Prior Actor', value: 'STICKY' }
                     ]}
                 />
             </Paper>
@@ -137,6 +139,22 @@ export function AssignmentBuilder({ value, onChange }: AssignmentBuilderProps) {
                         onChange={(val) => handleGroupChange(val || '')}
                     />
                     <Text size="xs" c="dimmed" mt={5}>Tasks will be automatically assigned to members of this group in turns.</Text>
+
+                    <Checkbox
+                        mt="sm"
+                        label="Apply only first time (Sticky)"
+                        description="If checked, subsequent tasks for this role will stick to the initially assigned user."
+                        checked={matrixRules && matrixRules[0] && matrixRules[0].value === 'true'}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            // Hack: Storing boolean flag in the rules array since we reused 'rules' prop
+                            // Format: [{ variable: 'sticky', value: 'true/false', ... }]
+                            const isChecked = e.currentTarget.checked;
+                            const rule = { variable: 'sticky', operator: '=', value: isChecked ? 'true' : 'false', role: '' };
+                            const newRules = [rule]; // Overwrite rules for RR
+                            setMatrixRules(newRules);
+                            updateJson(mechanism, groupName, newRules);
+                        }}
+                    />
                 </Card>
             )}
 
@@ -207,6 +225,24 @@ export function AssignmentBuilder({ value, onChange }: AssignmentBuilderProps) {
                             ))}
                         </Stack>
                     )}
+                </Card>
+            )}
+
+            {mechanism === 'STICKY' && (
+                <Card withBorder p="sm">
+                    <Text size="sm" mb={5}>Target Role (Prior Actor)</Text>
+                    <Select
+                        placeholder="Select Role"
+                        data={roleOptions}
+                        searchable
+                        value={groupName}
+                        onChange={(val) => handleGroupChange(val || '')}
+                    />
+                    <Text size="xs" c="dimmed" mt={5}>
+                        Tasks will be auto-assigned to the user who previously performed this role in the workflow.
+                        <br />
+                        <b>Fallback:</b> If no prior actor is found or user is OOO, it falls back to Round Robin for this role.
+                    </Text>
                 </Card>
             )}
         </Stack>

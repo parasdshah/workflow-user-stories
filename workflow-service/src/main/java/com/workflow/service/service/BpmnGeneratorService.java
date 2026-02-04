@@ -401,6 +401,21 @@ public class BpmnGeneratorService {
                         roleField.setStringValue((String) rules.get("matrixRole"));
                         listener.setFieldExtensions(List.of(roleField));
                         userTask.setTaskListeners(new java.util.ArrayList<>(List.of(listener)));
+                    } else if ("STICKY".equals(mechanism) || "PRIOR_ACTOR".equals(mechanism)) {
+                        FlowableListener listener = new FlowableListener();
+                        listener.setImplementationType(ImplementationType.IMPLEMENTATION_TYPE_DELEGATEEXPRESSION);
+                        listener.setImplementation("${stickyAssignmentListener}");
+                        listener.setEvent("create");
+                        
+                        // Pass 'role' or 'groupName' as the target role to sticky-match against
+                        String role = (String) rules.getOrDefault("role", rules.get("groupName"));
+                        
+                        FieldExtension roleField = new FieldExtension();
+                        roleField.setFieldName("role");
+                        roleField.setStringValue(role);
+                        listener.setFieldExtensions(List.of(roleField));
+                        
+                        userTask.setTaskListeners(new java.util.ArrayList<>(List.of(listener)));
                     } else if ("MANUAL".equals(mechanism)) {
                         // US-1: Manual Assignment
                         // The functionality relies on a process variable being set by the previous task
@@ -412,6 +427,8 @@ public class BpmnGeneratorService {
                     log.error("Failed to parse assignment rules for stage " + stage.getStageCode(), e);
                 }
             }
+            userTask.setId(stage.getStageCode());
+            userTask.setName(stage.getStageName());
             stageElement = userTask;
         }
 
