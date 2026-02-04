@@ -95,8 +95,6 @@ public class BpmnGeneratorService {
         // RESTART LOGIC - Backwards Connecting Model
 
         // Dictionary to hold Group Entry/Exit nodes for inter-group wiring
-        // Map<GroupIndex, Pair<Entry, Exit>>
-
         // Pass 1: Create Group Gateways (Split/Join) so they exist
         List<FlowElement> groupEntryNodes = new ArrayList<>();
         List<FlowElement> groupExitNodes = new ArrayList<>();
@@ -124,43 +122,70 @@ public class BpmnGeneratorService {
             }
         }
 
-        // End Event
+        // Pass 2: Calculate Effective Entry Nodes (Backwards)
+        // Wraps entry nodes with Conditional Gateways if needed.
+        // Array index matches 'groups' index.
+        List<FlowElement> effectiveEntryNodes = new java.util.ArrayList<>(groups.size());
+        for (int i = 0; i < groups.size(); i++) effectiveEntryNodes.add(null);
+
         EndEvent end = new EndEvent();
         end.setId("end");
         process.addFlowElement(end);
+
+        FlowElement nextEffectiveNode = end;
+
+        for (int i = groups.size() - 1; i >= 0; i--) {
+            List<StageConfig> group = groups.get(i);
+            FlowElement rawEntry = groupEntryNodes.get(i);
+
+            // Logic only applies to Sequential Stages with Entry Condition
+            // Parallel Blocks: Conditions handled inside the block (Split -> Stage).
+            // Group-level condition not supported yet.
+            if (group.size() == 1) {
+                StageConfig stage = group.get(0);
+                if (stage.getEntryCondition() != null && !stage.getEntryCondition().isBlank()) {
+                    // Create Wrapper Gateway
+                    ExclusiveGateway split = new ExclusiveGateway();
+                    split.setId("entry_split_" + stage.getStageCode() + "_" + System.nanoTime());
+                    process.addFlowElement(split);
+
+                    // Connect Split -> Stage (Condition)
+                    SequenceFlow enterFlow = connect(process, split, rawEntry);
+                    enterFlow.setConditionExpression(stage.getEntryCondition());
+
+                    // Connect Split -> Skip Target (Default)
+                    SequenceFlow skipFlow = connect(process, split, nextEffectiveNode);
+                    split.setDefaultFlow(skipFlow.getId());
+
+                    effectiveEntryNodes.set(i, split);
+                } else {
+                    effectiveEntryNodes.set(i, rawEntry);
+                }
+            } else {
+                effectiveEntryNodes.set(i, rawEntry);
+            }
+            
+            // For the previous iteration (i-1), the "Next/Skip" target is the Effective Entry of current (i)
+            nextEffectiveNode = effectiveEntryNodes.get(i);
+        }
 
         FlowElement lastNode = startEvent;
 
         for (int i = 0; i < groups.size(); i++) {
             List<StageConfig> group = groups.get(i);
-            FlowElement entry = groupEntryNodes.get(i);
+            FlowElement effectiveEntry = effectiveEntryNodes.get(i);
             FlowElement exit = groupExitNodes.get(i);
-            FlowElement nextNode = (i + 1 < groups.size()) ? groupEntryNodes.get(i + 1) : end;
+            FlowElement nextNode = (i + 1 < groups.size()) ? effectiveEntryNodes.get(i + 1) : end;
 
-            // A. Incoming Connection (Last -> Entry)
+            // A. Incoming Connection (Last -> Effective Entry)
             if (lastNode != null) {
-                if (group.size() > 1) {
-                    // Parallel: Connect Last -> Split directly.
-                    // Individual Entry Conditions are handled INSIDE the parallel block.
-                    connect(process, lastNode, entry);
-                } else {
-                    // Sequential: Connect Last -> Stage (Handle Entry Condition)
-                    StageConfig stage = group.get(0);
-                    FlowElement stageEl = entry;
-
-                    // Note: If skipping, where do we go? Next Node.
-                    if (stage.getEntryCondition() != null && !stage.getEntryCondition().isBlank()) {
-                        handleEntryCondition(process, lastNode, stageEl, stage, nextNode);
-                    } else {
-                        connect(process, lastNode, stageEl);
-                    }
-                }
+                connect(process, lastNode, effectiveEntry);
             }
 
             // B. Internal Processing & Outbound
             if (group.size() > 1) {
                 // Parallel
-                ParallelGateway split = (ParallelGateway) entry;
+                ParallelGateway split = (ParallelGateway) groupEntryNodes.get(i); // Raw Entry
                 ParallelGateway join = (ParallelGateway) exit;
 
                 for (StageConfig stage : group) {
@@ -168,58 +193,32 @@ public class BpmnGeneratorService {
 
                     // Split -> Stage (Handle Entry Condition)
                     if (stage.getEntryCondition() != null && !stage.getEntryCondition().isBlank()) {
-                        handleEntryCondition(process, split, stageEl, stage, join); // Skip to Join
+                         // Condition handled internally for Parallel
+                         handleEntryCondition(process, split, stageEl, stage, join); // Skip to Join
                     } else {
                         connect(process, split, stageEl);
                     }
 
                     // Stage -> Join (Handle Actions/Routing)
+                    // Note: Parallel internal stages connect to JOIN, not NextNode
                     handleStageOutbound(process, stage, stageEl, join, stageElements, objectMapper);
                 }
 
-                // Join -> Next (Wait, Loop A of next iteration will connect Join -> Next entry)
-                // So we do NOTHING here for outbound?
-                // lastNode = join.
+                // Join -> Next handled by next Loop A
                 lastNode = join;
 
             } else {
                 // Sequential
                 StageConfig stage = group.get(0);
-                FlowElement stageEl = (FlowElement) entry;
+                FlowElement stageEl = (FlowElement) groupEntryNodes.get(i); // Raw Stage
 
                 // Stage -> Next (Handle Actions/Routing)
-                // Logic connects stageEl to nextNode.
+                // Logic connects stageEl to nextNode (Effective Entry of next group).
                 handleStageOutbound(process, stage, stageEl, nextNode, stageElements, objectMapper);
 
-                // What is 'lastNode' for next iteration?
-                // handleStageOutbound might wire to 'nextNode' via gateways.
-                // But connections are made.
-                // So Next Loop's "Connect Last -> Entry" (Step A) is REDUNDANT/DUPLICATE if we
-                // use `lastNode=stageEl`.
-
-                // If Sequential Stage connects to NextNode via handleStageOutbound,
-                // the link is established.
-                // Next iteration Step A will try to connect Last -> Entry.
-                // If we set lastNode = null? Or skip Step A?
-
-                // Alternative: handleStageOutbound does NOT wire the default flow?
-                // No, it handles actions. Default Flow connects to "Next".
-
-                // Solution:
-                // Step A is only needed for Groups that need "Pre-Entry Connection" (like
-                // Split).
-                // Or if handleStageOutbound didn't cover it.
-
-                // Let's modify:
-                // Loop connects Current -> Next.
-                // We don't rely on "Next Loop connecting Previous -> Current".
-                //
-                // So Step A is REMOVED.
-                // Connect Start -> First Group (Before Loop).
-                // Inside Loop:
-                // Process Group -> Connects to NextNode.
-
-                lastNode = null; // Unused concept in this approach
+                // For Sequential, handleStageOutbound does the job. 
+                // We set lastNode = null so next loop doesn't try to double-connect.
+                lastNode = null; 
             }
         }
 
